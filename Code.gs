@@ -111,7 +111,7 @@ function fetchYesterdayEmails_(accessToken) {
   const dateAfter = formatDate_(yesterday);
   const dateBefore = formatDate_(today);
 
-  let query = `after:${dateAfter} before:${dateBefore} -in:trash -in:spam`;
+  let query = `after:${dateAfter} before:${dateBefore} -in:trash -in:spam -subject:[Digest]`;
   CONFIG.EXCLUDED_CATEGORIES.forEach(cat => {
     query += ` -${cat}`;
   });
@@ -377,7 +377,7 @@ function buildHtmlEmail_(data, dateStr, totalRaw, rawEmails) {
   .summary { padding: 24px 16px; background: #f8f9fa; border-bottom: 1px solid #e8eaed; }
   .summary p { margin: 0; font-size: 15px; line-height: 1.6; color: #444; word-wrap: break-word; overflow-wrap: break-word; }
   .stats { display: flex; justify-content: space-between; gap: 8px; padding: 16px 20px; border-bottom: 1px solid #e8eaed; flex-wrap: wrap; }
-  .stat { flex: 1 1 calc(25% - 8px); min-width: 70px; text-align: center; padding: 12px 4px; border-radius: 8px; }
+  .stat { flex: 0 1 auto; min-width: 70px; text-align: center; padding: 12px 16px; border-radius: 8px; }
   .stat .num { font-size: 24px; font-weight: 700; }
   .stat .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 4px; }
   .stat.important { background: #fce8e6; color: #c5221f; }
