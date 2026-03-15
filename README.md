@@ -22,8 +22,8 @@ Runs as a **Google Apps Script** project, triggered daily at 8 AM (America/Sao_P
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                 Google Apps Script                    │
-│                                                      │
+│                 Google Apps Script                  │
+│                                                     │
 │  ┌──────────┐    ┌───────────┐    ┌──────────────┐  │
 │  │ OAuth    │───>│ Gmail API │───>│ Gemini AI    │  │
 │  │ Token    │    │ (REST)    │    │ (categorize) │  │
