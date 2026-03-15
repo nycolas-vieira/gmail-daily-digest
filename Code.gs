@@ -19,9 +19,9 @@ const CONFIG = {
     return { name: name, email: email, tokenKey: `REFRESH_TOKEN_${name.toUpperCase()}` };
   }),
 
-  BLACKLIST: [],
+  BLACKLIST: (PropertiesService.getScriptProperties().getProperty('BLACK_LIST') || '').split(',').filter(Boolean),
 
-  EXCLUDED_CATEGORIES: [],
+  EXCLUDED_CATEGORIES: (PropertiesService.getScriptProperties().getProperty('EXCLUDED_CATEGORIES') || '').split(',').filter(Boolean),
 };
 
 // ============================================================
