@@ -1,0 +1,20 @@
+# Clasp
+.clasp.json
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Credentials & secrets
+*.pickle
+*.json.bak
+creds.json
+credentials.json
+token.json
