@@ -641,11 +641,11 @@ function setupDailyTrigger() {
   ScriptApp.newTrigger('dailyEmailDigest')
     .timeBased()
     .everyDays(1)
-    .atHour(8)
+    .atHour(7)
     .inTimezone('America/Sao_Paulo')
     .create();
 
-  Logger.log('Trigger diario criado: dailyEmailDigest as 8h (America/Sao_Paulo)');
+  Logger.log('Trigger diario criado: dailyEmailDigest as 7h (America/Sao_Paulo)');
 }
 
 function removeTriggers() {
