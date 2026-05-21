@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.0.0] - 2026-05-20
+
+**Major rewrite. Focus shifts from "send a digest email" to "keep the inbox clean and organized".** Argus now owns the read-and-summarize side of the user's email; this project becomes a Gmail organizer that runs on Apps Script (GCP) so the Mac does not have to be on.
+
+### Added
+
+- `cleanAndLabel_()` hourly job: scans each account's inbox, categorizes new emails with Gemini, applies Gmail labels (`Contas`, `Newsletter`, `Urgentes`, `Pessoais`, `Documentos`, `Outros`) and moves `LIXO` to the Gmail Trash (purged in 30 days by Gmail itself). Idempotent across runs - the inbox query excludes messages already touched by our labels.
+- `generateReport_()` time-driven job: runs at 07:00 and 19:00 BRT, consolidates counters accumulated since the last report into a Markdown file under the `gmail-organizer-reports` Drive folder, then resets the counters. Folder id is cached in `REPORT_FOLDER_ID` ScriptProperty.
+- Pre-Gemini sender hard-block via new `HARD_TRASH_SENDERS` ScriptProperty (CSV of substrings against the `From` header, lowercased). Cuts Gemini token cost for definitively-promotional senders.
+- Gemini per-email `alert` field. Surfaces tight-deadline items (billing about to expire, security urgencies). Alerts are accumulated in `STATS_ALERTS` and appear at the top of the next report.
+- New `installTriggers()` and `removeAllTriggers()` helpers replacing `setupDailyTrigger` / `removeTriggers`.
+
+### Changed
+
+- **OAuth scopes expanded** from `gmail.readonly + gmail.send` to `gmail.modify + gmail.labels + gmail.send + drive.file`. **Re-consent required after deploy** - Apps Script will prompt on first run.
+- Gemini categorization switched from 4 generic buckets (`IMPORTANTE/INTERESSANTE/NAO_RELEVANTE/PARA_APAGAR`) to 7 action-oriented categories (`LIXO/CONTAS/NEWSLETTER/URGENTE/PESSOAL/DOCUMENTO/OUTROS`). Prompt explicitly handles dual-use senders (Airbnb booking = `DOCUMENTO`, Airbnb promo = `LIXO`) - brand is the hint, content is the decision.
+- `Code.gs` shrunk from 1291 LOC to 664 LOC. v1 HTML digest renderer, newsletter classifier and delete-via-web-app endpoint are gone.
+
+### Removed
+
+- Daily HTML digest email (delegated to Argus's morning digest on Telegram).
+- Newsletter summarization (delegated to Argus reading the `Newsletter` Gmail label - separate change in `argus/sources/gmail-sync` to follow).
+- Web App `doGet` endpoint, delete-confirmation pages and `DELETE_TOKEN` flow. The organizer now auto-trashes `LIXO`.
+- The 4-category Gemini prompt and all v1 categorization helpers. Snapshot of the old `Code.gs` is preserved at `v1-legacy/Code.gs`.
+
+### Migration notes
+
+1. Update ScriptProperties:
+   - Drop `WEB_APP_URL`, `DELETE_TOKEN`, `SUMMARY_RECIPIENT`, `EXCLUDED_CATEGORIES` (no longer read).
+   - Optional new: `HARD_TRASH_SENDERS` (CSV of sender substrings to trash before Gemini).
+2. `clasp push` the new `appsscript.json` and `Code.gs`.
+3. In the Apps Script editor, run `setupCredentials()` once - verifies required keys.
+4. Run `installTriggers()` once - removes old triggers and installs hourly + 07/19h triggers.
+5. Apps Script will prompt for the new OAuth consent (Gmail modify + Drive file) on the next run. Approve from the personal account that owns the script.
+6. First report appears under Drive folder `gmail-organizer-reports` (auto-created). Mirror to vault via existing rclone bisync if desired.
+
+---
+
+## [1.4.0] - 2026-04-23
+
+### Added
+
+- **Two-email split**: digest now produces `[Digest]` (inbox-worthy emails) and `[Newsletter Digest]` (newsletters with context) in separate messages
+- Newsletter detection via `List-Unsubscribe` header + `CATEGORY_PROMOTIONS`/`CATEGORY_UPDATES` labels + sender patterns, with transactional denylist (GitHub, Supabase billing, Vercel security, banks, payment processors)
+- Dedicated Gemini prompt for newsletters that extracts **thesis** (headline-style, not "Newsletter sobre X"), 3 **takeaways** (concrete bullets), **theme** (AI_TECH / NEGOCIOS / EVENTOS / DESENVOLVIMENTO / LIFESTYLE / OUTRO), and **interest score** (1-5)
+- `destaques_do_dia` cross-cutting summary at top of newsletter digest
+- Newsletter body budget raised from 800 to 4500 chars, with aggressive HTML cleaning (strips `<style>`, `<script>`, image tags, anchor hrefs, unsubscribe/copyright boilerplate)
+- Cross-account deduplication: same sender + subject on multiple accounts now collapses to one entry with a "N contas" badge
+- Empty-account sanity probe: when an account returns 0 emails, fetches `/users/me/profile` to distinguish "inbox vazia" from "token quebrado" and surfaces the distinction in the status banner
+
+### Changed
+
+- Renamed `sendDigestEmail_` → `sendGeneralDigest_` (general digest no longer includes newsletters)
+- Account status banner shows amber warning for `0 emails` + healthy probe (vs green for `N emails`)
+
+### Added (utilities)
+
+- `extractBodies_()` returns both plain and HTML bodies for flexible downstream use
+- `cleanNewsletterHtml_()`, `isNewsletter_()`, `dedupeEmails_()`, `probeAccountProfile_()`, `categorizeNewslettersWithGemini_()`, `sendNewsletterDigest_()`, `buildNewsletterHtmlEmail_()`, `buildNewsletterSection_()`
+- `testNewsletterClassification_()` debug helper that logs how yesterday's emails split between general and newsletter buckets
+
+---
+
 ## [1.3.0] - 2026-04-17
 
 ### Changed
