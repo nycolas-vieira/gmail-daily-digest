@@ -33,17 +33,32 @@ const CONFIG = {
     return { name, email, tokenKey: `REFRESH_TOKEN_${name.toUpperCase()}` };
   }),
 
-  // Hard sender block (single source of truth for "always trash this sender").
-  // Stored as CSV in ScriptProperty `HARD_TRASH_SENDERS`. Bootstraps from the
-  // v1 `BLACK_LIST` property on first read if HARD_TRASH_SENDERS is empty.
-  // Auto-expanded: every email Gemini classifies as LIXO gets its From
-  // address added here, and the daily report lists what was added so the
-  // user can prune false positives by editing the property directly.
+  // Two-tier sender blocklist:
+  //
+  //   HARD_TRASH_SENDERS  -> auto-trash, no review, no Gemini call.
+  //                          Reserved for senders the user has explicitly
+  //                          confirmed are 100% junk. Bootstraps from the
+  //                          v1 `BLACK_LIST` property if empty.
+  //
+  //   SOFT_TRASH_SENDERS  -> skip Gemini, but apply label "Revisar" instead
+  //                          of trashing. The user reviews the Revisar
+  //                          label periodically and either promotes the
+  //                          sender to HARD (via `promoteSoftToHard()`) or
+  //                          removes it from SOFT if the classification
+  //                          was wrong.
+  //
+  // Auto-learn target is SOFT: whenever Gemini classifies an email as LIXO,
+  // the sender is added to SOFT (not HARD) so the next email from that
+  // sender is shown for review instead of being silently dropped. The user
+  // promotes after confidence.
   HARD_TRASH_SENDERS: (
     PropertiesService.getScriptProperties().getProperty('HARD_TRASH_SENDERS')
     || PropertiesService.getScriptProperties().getProperty('BLACK_LIST')
     || ''
   ).split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+
+  SOFT_TRASH_SENDERS: (PropertiesService.getScriptProperties().getProperty('SOFT_TRASH_SENDERS') || '')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
 
   // Senders that look like newsletters by header but are transactional.
   // Used to override the List-Unsubscribe heuristic in the prompt context.
@@ -73,6 +88,7 @@ const LABEL_NAMES = {
   PESSOAL: 'Pessoais',
   DOCUMENTO: 'Documentos',
   OUTROS: 'Outros',
+  REVISAR: 'Revisar',
 };
 
 // ============================================================
@@ -159,7 +175,8 @@ function processAccount_(acct, props) {
   Logger.log(`[${acct.name}] ${messageIds.length} candidate(s)`);
   if (messageIds.length === 0) return;
 
-  // 3. Hydrate + apply hard-trash before Gemini (saves tokens).
+  // 3. Hydrate. Before paying Gemini, apply the two sender-list shortcuts:
+  //    HARD -> trash immediately, SOFT -> label "Revisar" for manual review.
   const fetched = [];
   for (const id of messageIds) {
     const msg = fetchMessage_(accessToken, id);
@@ -171,6 +188,16 @@ function processAccount_(acct, props) {
       incrementStat_('STATS_TRASHED_TOTAL', 1);
       incrementStat_('STATS_LIXO_HARD', 1);
       Logger.log(`[${acct.name}] hard-trash ${from}`);
+      continue;
+    }
+    if (isSoftTrash_(from)) {
+      const revisarId = labelMap[LABEL_NAMES.REVISAR];
+      if (revisarId) {
+        applyLabel_(accessToken, id, revisarId);
+        incrementStat_(`STATS_LABEL_${LABEL_NAMES.REVISAR.toUpperCase()}`, 1);
+        incrementStat_('STATS_LABELED_TOTAL', 1);
+      }
+      Logger.log(`[${acct.name}] soft-trash (review) ${from}`);
       continue;
     }
     fetched.push(msg);
@@ -203,8 +230,8 @@ function processAccount_(acct, props) {
       trashMessage_(accessToken, d.messageId);
       incrementStat_(`STATS_TRASHED_${acct.name.toUpperCase()}`, 1);
       incrementStat_('STATS_TRASHED_TOTAL', 1);
-      const learned = learnHardTrashSender_(fromById[d.messageId]);
-      if (learned) Logger.log(`[${acct.name}] learned HARD_TRASH ${learned}`);
+      const learned = learnSoftTrashSender_(fromById[d.messageId]);
+      if (learned) Logger.log(`[${acct.name}] learned SOFT_TRASH ${learned}`);
     } else {
       const labelName = LABEL_NAMES[cat] || LABEL_NAMES.OUTROS;
       const labelId = labelMap[labelName];
@@ -404,35 +431,125 @@ function isHardTrash_(fromLower) {
   return CONFIG.HARD_TRASH_SENDERS.some(needle => fromLower.includes(needle));
 }
 
+function isSoftTrash_(fromLower) {
+  if (!fromLower) return false;
+  return CONFIG.SOFT_TRASH_SENDERS.some(needle => fromLower.includes(needle));
+}
+
 /**
  * Extract the bare email from a "Name <addr>" header and add it to
- * HARD_TRASH_SENDERS if not already there. Returns the address that was
- * added (for stats), or null if already known / unparseable.
+ * SOFT_TRASH_SENDERS if not already covered there OR in HARD. Returns the
+ * address that was added (for stats), or null if already known.
  *
- * Idempotency: re-reads the property each call to absorb prior additions
- * from earlier iterations of the same run.
+ * Auto-learn defaults to SOFT (not HARD) so the next email from this
+ * sender is shown for review under the "Revisar" label instead of being
+ * silently dropped. The user promotes confirmed-junk senders to HARD via
+ * `promoteSoftToHard()`.
  */
-function learnHardTrashSender_(fromHeader) {
+function learnSoftTrashSender_(fromHeader) {
   if (!fromHeader) return null;
   const props = PropertiesService.getScriptProperties();
-  // Effective list, preserving the v1 BLACK_LIST bootstrap so first-time
-  // writes do not "lose" the existing values.
-  const raw = (props.getProperty('HARD_TRASH_SENDERS')
-             || props.getProperty('BLACK_LIST')
-             || '').split(',').map(s => s.trim()).filter(Boolean);
+  const soft = (props.getProperty('SOFT_TRASH_SENDERS') || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const hard = (props.getProperty('HARD_TRASH_SENDERS')
+              || props.getProperty('BLACK_LIST')
+              || '').split(',').map(s => s.trim()).filter(Boolean);
   const lower = fromHeader.toLowerCase();
   const angle = lower.match(/<([^>]+)>/);
   const addr = (angle ? angle[1] : lower).trim();
   if (!addr || !addr.includes('@')) return null;
-  // Already covered by an existing substring entry?
-  if (raw.some(n => addr.includes(n.toLowerCase()))) return null;
-  raw.push(addr);
-  props.setProperty('HARD_TRASH_SENDERS', raw.join(','));
-  // Track for the next report.
-  const added = JSON.parse(props.getProperty('STATS_HARD_TRASH_ADDED') || '[]');
+  // Already covered by either tier?
+  if (hard.some(n => addr.includes(n.toLowerCase()))) return null;
+  if (soft.some(n => addr.includes(n.toLowerCase()))) return null;
+  soft.push(addr);
+  props.setProperty('SOFT_TRASH_SENDERS', soft.join(','));
+  const added = JSON.parse(props.getProperty('STATS_SOFT_TRASH_ADDED') || '[]');
   added.push(addr);
-  props.setProperty('STATS_HARD_TRASH_ADDED', JSON.stringify(added));
+  props.setProperty('STATS_SOFT_TRASH_ADDED', JSON.stringify(added));
   return addr;
+}
+
+/**
+ * One-shot migration: move addresses listed in property MIGRATE_HARD_TO_SOFT
+ * from HARD to SOFT (good for demoting auto-learned senders that turned out
+ * to be dual-use, e.g. sender@vendor.example). Property is cleared after run.
+ */
+function migrateHardToSoft() {
+  const props = PropertiesService.getScriptProperties();
+  const csv = props.getProperty('MIGRATE_HARD_TO_SOFT') || '';
+  if (!csv) {
+    Logger.log('Set MIGRATE_HARD_TO_SOFT property first (CSV of substrings to demote).');
+    return;
+  }
+  const toMove = csv.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const hard = (props.getProperty('HARD_TRASH_SENDERS')
+              || props.getProperty('BLACK_LIST')
+              || '').split(',').map(s => s.trim()).filter(Boolean);
+  const soft = (props.getProperty('SOFT_TRASH_SENDERS') || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const stayInHard = [];
+  let moved = 0;
+  for (const h of hard) {
+    if (toMove.some(m => h.toLowerCase().includes(m))) {
+      if (!soft.some(s => s.toLowerCase() === h.toLowerCase())) soft.push(h);
+      moved++;
+    } else {
+      stayInHard.push(h);
+    }
+  }
+  props.setProperty('HARD_TRASH_SENDERS', stayInHard.join(','));
+  props.setProperty('SOFT_TRASH_SENDERS', soft.join(','));
+  props.deleteProperty('MIGRATE_HARD_TO_SOFT');
+  Logger.log(`Migrated ${moved} sender(s) HARD -> SOFT. HARD=${stayInHard.length} SOFT=${soft.length}.`);
+}
+
+/**
+ * v2.1.0 one-shot: demote the 5 senders that were auto-learned as HARD
+ * during the 2026-05-21 production run but are actually dual-use
+ * (Fireflies notifications, GCP billing, GitHub security, Oracle account,
+ * Teams meeting reminders). Safe to re-run - already-migrated entries
+ * are no-ops.
+ */
+function applyV21Migration_oneshot() {
+  PropertiesService.getScriptProperties().setProperty(
+    'MIGRATE_HARD_TO_SOFT',
+    'sender@vendor.example,cloud@service.example,notifications@github.com,replies@vendor.example,noreply@teams.example'
+  );
+  migrateHardToSoft();
+}
+
+/**
+ * One-shot promotion: move addresses listed in property PROMOTE_SOFT_TO_HARD
+ * from SOFT to HARD (after the user reviewed Revisar emails and confirmed
+ * they are truly junk). Property is cleared after run.
+ */
+function promoteSoftToHard() {
+  const props = PropertiesService.getScriptProperties();
+  const csv = props.getProperty('PROMOTE_SOFT_TO_HARD') || '';
+  if (!csv) {
+    Logger.log('Set PROMOTE_SOFT_TO_HARD property first (CSV of substrings to promote).');
+    return;
+  }
+  const toMove = csv.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const soft = (props.getProperty('SOFT_TRASH_SENDERS') || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const hard = (props.getProperty('HARD_TRASH_SENDERS')
+              || props.getProperty('BLACK_LIST')
+              || '').split(',').map(s => s.trim()).filter(Boolean);
+  const stayInSoft = [];
+  let moved = 0;
+  for (const s of soft) {
+    if (toMove.some(m => s.toLowerCase().includes(m))) {
+      if (!hard.some(h => h.toLowerCase() === s.toLowerCase())) hard.push(s);
+      moved++;
+    } else {
+      stayInSoft.push(s);
+    }
+  }
+  props.setProperty('SOFT_TRASH_SENDERS', stayInSoft.join(','));
+  props.setProperty('HARD_TRASH_SENDERS', hard.join(','));
+  props.deleteProperty('PROMOTE_SOFT_TO_HARD');
+  Logger.log(`Promoted ${moved} sender(s) SOFT -> HARD. HARD=${hard.length} SOFT=${stayInSoft.length}.`);
 }
 
 function quoteLabel_(name) {
@@ -468,7 +585,7 @@ function readStats_(props) {
     perLabel: {},
     errorsByAccount: {},
     alerts: JSON.parse(props.getProperty('STATS_ALERTS') || '[]'),
-    hardTrashAdded: JSON.parse(props.getProperty('STATS_HARD_TRASH_ADDED') || '[]'),
+    softTrashAdded: JSON.parse(props.getProperty('STATS_SOFT_TRASH_ADDED') || '[]'),
   };
   for (const acct of CONFIG.ACCOUNTS) {
     out.perAccount[acct.name] = parseInt(props.getProperty(`STATS_TRASHED_${acct.name.toUpperCase()}`) || '0', 10);
@@ -483,7 +600,7 @@ function readStats_(props) {
 function resetStats_(props, now) {
   const keysToClear = [
     'STATS_TRASHED_TOTAL', 'STATS_LABELED_TOTAL', 'STATS_LIXO_HARD', 'STATS_ALERTS',
-    'STATS_HARD_TRASH_ADDED',
+    'STATS_SOFT_TRASH_ADDED',
   ];
   for (const acct of CONFIG.ACCOUNTS) {
     keysToClear.push(`STATS_TRASHED_${acct.name.toUpperCase()}`);
@@ -543,18 +660,29 @@ function buildReportMarkdown_(stats, periodStart, now) {
   }
   lines.push('');
 
-  // HARD_TRASH_SENDERS additions (single source of truth — review for false positives here)
-  lines.push('## Adicionados ao HARD_TRASH_SENDERS');
-  if (stats.hardTrashAdded.length === 0) {
+  // Soft trash additions - auto-learned senders, now under label "Revisar"
+  // for manual review. Promote to HARD via `promoteSoftToHard()` once
+  // confirmed; remove from SOFT_TRASH_SENDERS if Gemini was wrong.
+  lines.push('## Adicionados ao SOFT_TRASH_SENDERS (para revisao)');
+  if (stats.softTrashAdded.length === 0) {
     lines.push('- (nenhum)');
   } else {
-    // Dedupe in case the same sender hit LIXO multiple times.
-    const unique = Array.from(new Set(stats.hardTrashAdded));
+    const unique = Array.from(new Set(stats.softTrashAdded));
     unique.forEach(addr => lines.push(`- ${addr}`));
     lines.push('');
-    lines.push('> Edite a property `HARD_TRASH_SENDERS` no Apps Script pra remover qualquer endereco que voce nao queira bloquear.');
+    lines.push('> Esses senders agora recebem a label `Revisar` (nao vao pro trash). Reveja-os no Gmail.');
+    lines.push('> - Confirmou que sao lixo? Promova pra HARD: set property `PROMOTE_SOFT_TO_HARD` = csv e rode `promoteSoftToHard()`.');
+    lines.push('> - Foi falso positivo? Edite a property `SOFT_TRASH_SENDERS` removendo o endereco.');
   }
   lines.push('');
+
+  // Revisar label volume - signal that the user has stuff to triage
+  const revisarCount = stats.perLabel[LABEL_NAMES.REVISAR] || 0;
+  if (revisarCount > 0) {
+    lines.push(`## Em revisao (label \`Revisar\`)`);
+    lines.push(`- **${revisarCount}** email(s) labeled como Revisar no periodo.`);
+    lines.push('');
+  }
 
   // Alerts
   lines.push('## Alertas');

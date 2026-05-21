@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.1.0] - 2026-05-21
+
+### Added
+
+- **`SOFT_TRASH_SENDERS` two-tier blocklist.** A new ScriptProperty alongside `HARD_TRASH_SENDERS`. Emails from a SOFT sender skip Gemini and receive the new `Revisar` Gmail label instead of being trashed. The user reviews the Revisar label periodically and either promotes the sender to HARD (auto-trash) or removes it from SOFT (false positive).
+- New `Revisar` label - created automatically per account on the first run that needs it.
+- Auto-learn now targets SOFT, not HARD. When Gemini classifies an email as LIXO, the sender is added to `SOFT_TRASH_SENDERS` so subsequent emails get reviewed before being silently dropped. This protects against Gemini misclassification on dual-use senders (e.g. `sender@vendor.example`, `cloud@service.example`, `notifications@github.com` - confirmed cases from the 2026-05-21 production run).
+- One-shot helpers `migrateHardToSoft()` and `promoteSoftToHard()`. Each reads a CSV from a corresponding ScriptProperty (`MIGRATE_HARD_TO_SOFT` / `PROMOTE_SOFT_TO_HARD`), moves matching entries between the two lists, then clears the trigger property.
+- Report (Markdown in Drive) gains:
+  - `## Adicionados ao SOFT_TRASH_SENDERS (para revisao)` listing learned senders with instructions to promote or revert.
+  - `## Em revisao (label \`Revisar\`)` block surfacing the volume of pending-review emails for the period.
+
+### Changed
+
+- `learnHardTrashSender_()` renamed to `learnSoftTrashSender_()`. Skips senders already covered by HARD or SOFT.
+- Stats: `STATS_HARD_TRASH_ADDED` replaced by `STATS_SOFT_TRASH_ADDED`. Report section name updated accordingly.
+
+### Migration notes
+
+After deploy, demote the 5 questionable auto-learned senders from the previous run from HARD to SOFT:
+
+1. ScriptProperty `MIGRATE_HARD_TO_SOFT` =
+   `sender@vendor.example,cloud@service.example,notifications@github.com,replies@vendor.example,noreply@teams.example`
+2. Run `migrateHardToSoft()` from the editor. Property auto-clears.
+3. Next `cleanAndLabel_()` will apply the `Revisar` label to incoming emails from those senders instead of trashing them.
+
+---
+
 ## [2.0.1] - 2026-05-21
 
 ### Fixed
