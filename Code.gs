@@ -72,10 +72,6 @@ const CONFIG = {
     '@stripe.com', '@aws.amazon.com',
   ],
 
-  // Drive folder name where reports land.
-  REPORT_FOLDER_NAME: 'gmail-organizer-reports',
-
-  // Where reports are mirrored to in Markdown.
   TZ: 'America/Sao_Paulo',
 };
 
@@ -149,6 +145,11 @@ function testReportPreview() {
   const periodStart = stats.periodStart ? new Date(stats.periodStart) : null;
   const md = buildReportMarkdown_(stats, periodStart, new Date());
   Logger.log(md);
+}
+
+/** Manual trigger for generateReport_ (private fns are hidden from the IDE run dropdown). */
+function runGenerateReport() {
+  generateReport_();
 }
 
 // ============================================================
@@ -549,6 +550,12 @@ function promoteSoftToHard() {
   props.setProperty('SOFT_TRASH_SENDERS', stayInSoft.join(','));
   props.setProperty('HARD_TRASH_SENDERS', hard.join(','));
   props.deleteProperty('PROMOTE_SOFT_TO_HARD');
+  if (moved > 0) {
+    const promoted = soft.filter(s => toMove.some(m => s.toLowerCase().includes(m)));
+    const existing = JSON.parse(props.getProperty('STATS_HARD_TRASH_ADDED') || '[]');
+    existing.push(...promoted);
+    props.setProperty('STATS_HARD_TRASH_ADDED', JSON.stringify(existing));
+  }
   Logger.log(`Promoted ${moved} sender(s) SOFT -> HARD. HARD=${hard.length} SOFT=${stayInSoft.length}.`);
 }
 
@@ -586,6 +593,11 @@ function readStats_(props) {
     errorsByAccount: {},
     alerts: JSON.parse(props.getProperty('STATS_ALERTS') || '[]'),
     softTrashAdded: JSON.parse(props.getProperty('STATS_SOFT_TRASH_ADDED') || '[]'),
+    hardTrashAdded: JSON.parse(props.getProperty('STATS_HARD_TRASH_ADDED') || '[]'),
+    hardListCount: (props.getProperty('HARD_TRASH_SENDERS') || props.getProperty('BLACK_LIST') || '')
+      .split(',').map(s => s.trim()).filter(Boolean).length,
+    softListCount: (props.getProperty('SOFT_TRASH_SENDERS') || '')
+      .split(',').map(s => s.trim()).filter(Boolean).length,
   };
   for (const acct of CONFIG.ACCOUNTS) {
     out.perAccount[acct.name] = parseInt(props.getProperty(`STATS_TRASHED_${acct.name.toUpperCase()}`) || '0', 10);
@@ -600,7 +612,7 @@ function readStats_(props) {
 function resetStats_(props, now) {
   const keysToClear = [
     'STATS_TRASHED_TOTAL', 'STATS_LABELED_TOTAL', 'STATS_LIXO_HARD', 'STATS_ALERTS',
-    'STATS_SOFT_TRASH_ADDED',
+    'STATS_SOFT_TRASH_ADDED', 'STATS_HARD_TRASH_ADDED',
   ];
   for (const acct of CONFIG.ACCOUNTS) {
     keysToClear.push(`STATS_TRASHED_${acct.name.toUpperCase()}`);
@@ -633,7 +645,8 @@ function buildReportMarkdown_(stats, periodStart, now) {
   lines.push(`**Periodo:** ${fmt(periodStart)} -> ${fmt(now)}`);
   lines.push('');
 
-  // Trashed
+  // Trashed - split by source so the user can audit silent (HARD) vs
+  // LLM-decided (Gemini LIXO) deletions separately.
   lines.push('## Apagados');
   if (stats.trashedTotal === 0) {
     lines.push('- (nenhum)');
@@ -641,22 +654,42 @@ function buildReportMarkdown_(stats, periodStart, now) {
     const parts = Object.entries(stats.perAccount)
       .filter(([_, n]) => n > 0)
       .map(([acct, n]) => `${n} ${acct}`);
+    const geminiLixo = Math.max(0, stats.trashedTotal - stats.lixoHard);
     lines.push(`- **Total:** ${stats.trashedTotal} (${parts.join(', ') || 'desconhecido'})`);
-    if (stats.lixoHard > 0) {
-      lines.push(`- Sender hard-block: ${stats.lixoHard}`);
-    }
+    lines.push(`  - HARD blocklist (silencioso, sem Gemini): ${stats.lixoHard}`);
+    lines.push(`  - Gemini classificou LIXO: ${geminiLixo}`);
   }
   lines.push('');
 
-  // Labeled
+  // Labeled - call out the SOFT route (label Revisar) separately so it
+  // is visible at a glance even when the rest of Catalogados is busy.
   lines.push('## Catalogados');
   if (stats.labeledTotal === 0) {
     lines.push('- (nenhum)');
   } else {
+    const revisar = stats.perLabel[LABEL_NAMES.REVISAR] || 0;
+    const otherLabels = stats.labeledTotal - revisar;
     const parts = Object.entries(stats.perLabel)
-      .filter(([_, n]) => n > 0)
+      .filter(([label, n]) => n > 0 && label !== LABEL_NAMES.REVISAR)
       .map(([label, n]) => `${n} ${label}`);
-    lines.push(`- **Total:** ${stats.labeledTotal} (${parts.join(', ') || 'desconhecido'})`);
+    lines.push(`- **Total:** ${stats.labeledTotal}`);
+    lines.push(`  - SOFT blocklist -> label \`Revisar\`: ${revisar}`);
+    lines.push(`  - Categorizados por Gemini: ${otherLabels} (${parts.join(', ') || 'nenhum'})`);
+  }
+  lines.push('');
+
+  // Hard trash additions - senders promoted SOFT -> HARD via
+  // promoteSoftToHard() during this period. These now silent-trash with
+  // no Gemini call. Surfaced for audit.
+  lines.push('## Adicionados ao HARD_TRASH_SENDERS (auto-trash)');
+  if (stats.hardTrashAdded.length === 0) {
+    lines.push('- (nenhum)');
+  } else {
+    const unique = Array.from(new Set(stats.hardTrashAdded));
+    unique.forEach(addr => lines.push(`- ${addr}`));
+    lines.push('');
+    lines.push('> Esses senders agora vao direto pro Trash, sem Gemini, sem label.');
+    lines.push('> - Mudou de ideia? Set property `MIGRATE_HARD_TO_SOFT` = csv e rode `migrateHardToSoft()` pra demote pra SOFT.');
   }
   lines.push('');
 
@@ -684,6 +717,13 @@ function buildReportMarkdown_(stats, periodStart, now) {
     lines.push('');
   }
 
+  // Audit footer - snapshot of the two lists right now, so the user can
+  // periodically sanity-check what is being silently excluded.
+  lines.push('## Estado atual das listas');
+  lines.push(`- **HARD_TRASH_SENDERS:** ${stats.hardListCount} sender(s) (auto-trash)`);
+  lines.push(`- **SOFT_TRASH_SENDERS:** ${stats.softListCount} sender(s) (label Revisar)`);
+  lines.push('');
+
   // Alerts
   lines.push('## Alertas');
   if (stats.alerts.length === 0) {
@@ -705,32 +745,28 @@ function buildReportMarkdown_(stats, periodStart, now) {
 }
 
 function saveReportToDrive_(filename, content) {
-  const folder = getOrCreateReportFolder_();
+  const folder = getReportFolder_();
   const blob = Utilities.newBlob(content, 'text/markdown', filename);
   return folder.createFile(blob);
 }
 
-function getOrCreateReportFolder_() {
+// Returns the Drive folder where reports are written. REPORT_FOLDER_ID
+// must point to memories/inbox/gmail-organizer/ on Drive so the vault
+// bisync (gdrive:memories <-> ~/repos/memories) carries reports to the
+// Mac vault and to Obsidian Mobile on Android. Failing loudly on a
+// missing/invalid id is intentional - silently creating a stray folder
+// at Drive root would break the bisync flow.
+function getReportFolder_() {
   const props = PropertiesService.getScriptProperties();
-  const cached = props.getProperty('REPORT_FOLDER_ID');
-  if (cached) {
-    try {
-      return DriveApp.getFolderById(cached);
-    } catch (e) {
-      // Folder gone; fall through to recreate.
-    }
+  const folderId = props.getProperty('REPORT_FOLDER_ID');
+  if (!folderId) {
+    throw new Error('REPORT_FOLDER_ID ScriptProperty is required (Drive ID of memories/inbox/gmail-organizer/).');
   }
-  // Search by name (case-insensitive). Only files created by this app
-  // are visible under drive.file scope, so first run creates a new one.
-  const folders = DriveApp.getFoldersByName(CONFIG.REPORT_FOLDER_NAME);
-  let folder;
-  if (folders.hasNext()) {
-    folder = folders.next();
-  } else {
-    folder = DriveApp.createFolder(CONFIG.REPORT_FOLDER_NAME);
+  try {
+    return DriveApp.getFolderById(folderId);
+  } catch (e) {
+    throw new Error(`REPORT_FOLDER_ID '${folderId}' is invalid or inaccessible: ${e.message}`);
   }
-  props.setProperty('REPORT_FOLDER_ID', folder.getId());
-  return folder;
 }
 
 // ============================================================

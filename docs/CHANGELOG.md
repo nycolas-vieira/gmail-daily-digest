@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.2.0] - 2026-05-21
+
+### Added
+
+- Audit divisions in the Drive report. `buildReportMarkdown_()` now emits four blocklist-related sections per report (in order): `## Adicionados ao HARD_TRASH_SENDERS (auto-trash)`, `## Adicionados ao SOFT_TRASH_SENDERS (para revisao)`, `## Em revisao (label Revisar)`, and a closing `## Estado atual das listas` snapshot with the current size of both lists. This makes each report a self-contained audit log of what is being silently excluded.
+- `STATS_HARD_TRASH_ADDED` (resurrected with new semantics): tracks senders promoted SOFT -> HARD via `promoteSoftToHard()` during the period, so the next report surfaces them. Cleared on each report along with the other per-period counters.
+- **`## Apagados` and `## Catalogados` now show a source breakdown.** Apagados splits the trashed total into "HARD blocklist (silencioso, sem Gemini)" vs "Gemini classificou LIXO". Catalogados splits the labeled total into "SOFT blocklist -> label `Revisar`" vs "Categorizados por Gemini" (with the per-category counts inline). Lets the user audit at a glance how much of the work was done by deterministic blocklists vs by the LLM.
+
+### Changed
+
+- **Drive folder relocated.** Reports now live at `gdrive:memories/inbox/gmail-organizer/` (inside the vault folder) instead of `gdrive:gmail-organizer-reports/` at Drive root. This makes the existing vault bisync (`*/10 * * * * rclone bisync ~/repos/memories gdrive:memories`) deliver reports to the Mac and to Obsidian Mobile on Android with zero extra cron entries.
+- **OAuth scope expanded** from `drive.file` to `drive` (full Drive access). Required because the new report folder is created/managed outside the app (it is part of the user's vault on Drive); `drive.file` only allows access to files the app itself created. **Re-consent prompted on next run.**
+- `getOrCreateReportFolder_()` renamed to `getReportFolder_()` and stripped of fallback behaviour. It now requires `REPORT_FOLDER_ID` to be set and throws if the property is missing or the folder is inaccessible. Silently creating a stray folder at Drive root would break the bisync, so failing loudly is the desired behaviour.
+- Dropped `CONFIG.REPORT_FOLDER_NAME` (no longer referenced).
+
+### Migration notes
+
+After deploy:
+
+1. Set ScriptProperty `REPORT_FOLDER_ID` = `<redacted-drive-folder-id>` (Drive ID of `memories/inbox/gmail-organizer/`). The folder was provisioned ahead of time via `rclone mkdir gdrive-personal:memories/inbox/gmail-organizer`.
+2. Trigger any function from the editor (e.g. `setupCredentials()`). Apps Script will prompt for re-consent with the new `drive` scope - approve from the personal account.
+3. Next `generateReport_()` (07:00 BRT) writes to the new folder. Mac and Android pick it up via the existing vault bisync; no new cron needed.
+4. The legacy `gdrive:gmail-organizer-reports/` folder at Drive root was never populated by v2 (the 19:00 fire on 2026-05-20 failed due to the SyntaxError fixed in v2.0.1). Nothing to migrate.
+
+---
+
 ## [2.1.0] - 2026-05-21
 
 ### Added
