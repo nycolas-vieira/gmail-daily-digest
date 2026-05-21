@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.0.1] - 2026-05-21
+
+### Fixed
+
+- Added `.claspignore` to exclude `v1-legacy/`, `docs/`, `README.md` and `.git*` from `clasp push`. Apps Script flattens every `.gs` file in the project into one global scope, so the v1 snapshot was clashing with v2's identical `CONFIG`, function names, and constants - the editor raised `SyntaxError: Identifier 'CONFIG' has already been declared`. Next `clasp push --force` removes the legacy file from the remote project; the v1 snapshot remains in the repo for reference.
+
+---
+
 ## [2.0.0] - 2026-05-20
 
 **Major rewrite. Focus shifts from "send a digest email" to "keep the inbox clean and organized".** Argus now owns the read-and-summarize side of the user's email; this project becomes a Gmail organizer that runs on Apps Script (GCP) so the Mac does not have to be on.

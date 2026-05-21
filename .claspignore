@@ -1,0 +1,11 @@
+# Files clasp should NOT push to Apps Script.
+# Apps Script flattens every .gs into one global scope, so the v1
+# snapshot would clash with the v2 file (same CONFIG, same function
+# names). Keep it as repo reference only.
+v1-legacy/**
+
+# Repo housekeeping that does not belong in the GAS project.
+docs/**
+README.md
+.gitignore
+.git/**
