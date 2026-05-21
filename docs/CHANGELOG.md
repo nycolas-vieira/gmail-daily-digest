@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.3.0] - 2026-05-21
+
+### Added
+
+- **Archive on label.** When `cleanAndLabel_` categorizes an email as Newsletter, Outros, Documentos or Contas, the email is now removed from the inbox in the same Gmail API call (label added + `INBOX` removed). The email stays accessible via its category label and in `All Mail`. Categories that need human attention (Urgentes, Pessoais, Revisar) keep the inbox label so they stay visible.
+- New `ARCHIVE_CATEGORIES` constant declaring which categories get archived. Change the set to tune which categories silence themselves vs surface.
+- `applyLabel_` gains an `archive` boolean parameter so the apply+archive operation stays a single round trip per email.
+
+### Changed
+
+- **Dropped the `newer_than:7d` filter** from the `cleanAndLabel_` inbox query. The hourly trigger now sees the entire unlabeled inbox at any age. The original 7-day filter was there to limit cost in v1; it had the side effect of leaving every email older than a week stuck in inbox forever. With v2's HARD/SOFT shortcuts plus the archive-at-label behaviour above, the trigger can safely drain the entire historical backlog.
+- Catalogados report breakdown stays the same shape; the meaning of the "Categorizados por Gemini" subtotal now spans both archived and inbox-retained labels.
+
+### Removed
+
+- Dead code: unused `CATEGORIES` constant, unused `labelIds` local in `processAccount_`, and unused `CONFIG.NEWSLETTER_DENYLIST` (v1 leftover with no readers).
+- Stale v2.1.0 one-shot `applyV21Migration_oneshot` (its sender-list migration was executed and the function had no remaining use).
+
+### Notes
+
+- Apps Script execution is capped at 6 minutes per invocation, which is not enough to drain a multi-thousand-email backlog. For the initial v2.3.0 migration the maintainer used a one-off local Python script (not committed) to drain the historical inbox in one pass, then let the hourly trigger maintain steady state. Going forward, normal new-email volume fits comfortably under the per-invocation cap.
+
+---
+
 ## [2.2.0] - 2026-05-21
 
 ### Added

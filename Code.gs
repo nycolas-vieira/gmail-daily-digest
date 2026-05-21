@@ -60,22 +60,8 @@ const CONFIG = {
   SOFT_TRASH_SENDERS: (PropertiesService.getScriptProperties().getProperty('SOFT_TRASH_SENDERS') || '')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
 
-  // Senders that look like newsletters by header but are transactional.
-  // Used to override the List-Unsubscribe heuristic in the prompt context.
-  NEWSLETTER_DENYLIST: [
-    'noreply@github.com', 'notifications@github.com',
-    'billing@service.example', 'security@service.example',
-    'noreply@service.example', 'noreply@provider.example',
-    'noreply@accounts.example', 'security@social.example',
-    '@itau.com.br', '@santander.com.br', '@bradesco.com.br',
-    '@nubank.com.br', '@mercadopago.com', '@paypal.com',
-    '@stripe.com', '@aws.amazon.com',
-  ],
-
   TZ: 'America/Sao_Paulo',
 };
-
-const CATEGORIES = ['LIXO', 'CONTAS', 'NEWSLETTER', 'URGENTE', 'PESSOAL', 'DOCUMENTO', 'OUTROS'];
 
 const LABEL_NAMES = {
   CONTAS: 'Contas',
@@ -86,6 +72,12 @@ const LABEL_NAMES = {
   OUTROS: 'Outros',
   REVISAR: 'Revisar',
 };
+
+// Categories whose emails are removed from inbox (archived) after the
+// label is applied. The email is still readable via its label, just
+// not visible in inbox. Other categories (URGENTE, PESSOAL, REVISAR)
+// stay in inbox because they need user attention.
+const ARCHIVE_CATEGORIES = new Set(['NEWSLETTER', 'OUTROS', 'DOCUMENTO', 'CONTAS']);
 
 // ============================================================
 // ENTRY POINTS
@@ -164,14 +156,13 @@ function processAccount_(acct, props) {
   }
   const accessToken = getAccessToken_(refreshToken);
 
-  // 1. Ensure the 6 labels we use all exist (cache the id map per run).
+  // 1. Ensure the labels we use all exist (cache the id map per run).
   const labelMap = ensureLabelsExist_(accessToken);
-  const labelIds = Object.values(labelMap);
 
   // 2. Fetch fresh inbox messages NOT already touched by us. The exclusion
   //    on existing labels keeps the job idempotent across hourly runs.
   const labelExclusion = Object.values(LABEL_NAMES).map(n => `-label:${quoteLabel_(n)}`).join(' ');
-  const query = `in:inbox -in:trash newer_than:7d ${labelExclusion}`;
+  const query = `in:inbox -in:trash ${labelExclusion}`;
   const messageIds = listMessageIds_(accessToken, query, CONFIG.MAX_EMAILS_PER_RUN);
   Logger.log(`[${acct.name}] ${messageIds.length} candidate(s)`);
   if (messageIds.length === 0) return;
@@ -234,10 +225,11 @@ function processAccount_(acct, props) {
       const learned = learnSoftTrashSender_(fromById[d.messageId]);
       if (learned) Logger.log(`[${acct.name}] learned SOFT_TRASH ${learned}`);
     } else {
-      const labelName = LABEL_NAMES[cat] || LABEL_NAMES.OUTROS;
+      const resolvedCat = LABEL_NAMES[cat] ? cat : 'OUTROS';
+      const labelName = LABEL_NAMES[resolvedCat];
       const labelId = labelMap[labelName];
       if (labelId) {
-        applyLabel_(accessToken, d.messageId, labelId);
+        applyLabel_(accessToken, d.messageId, labelId, ARCHIVE_CATEGORIES.has(resolvedCat));
         incrementStat_(`STATS_LABEL_${labelName.toUpperCase()}`, 1);
         incrementStat_('STATS_LABELED_TOTAL', 1);
       }
@@ -374,17 +366,19 @@ function trashMessage_(accessToken, id) {
   }
 }
 
-function applyLabel_(accessToken, id, labelId) {
+function applyLabel_(accessToken, id, labelId, archive) {
   const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/modify`;
+  const body = { addLabelIds: [labelId] };
+  if (archive) body.removeLabelIds = ['INBOX'];
   const r = UrlFetchApp.fetch(url, {
     method: 'post',
     headers: { Authorization: `Bearer ${accessToken}` },
     contentType: 'application/json',
-    payload: JSON.stringify({ addLabelIds: [labelId] }),
+    payload: JSON.stringify(body),
     muteHttpExceptions: true,
   });
   if (r.getResponseCode() >= 300) {
-    Logger.log(`label ${id} -> ${labelId}: HTTP ${r.getResponseCode()} ${r.getContentText()}`);
+    Logger.log(`label ${id} -> ${labelId}${archive ? ' +archive' : ''}: HTTP ${r.getResponseCode()} ${r.getContentText()}`);
   }
 }
 
@@ -502,21 +496,6 @@ function migrateHardToSoft() {
   props.setProperty('SOFT_TRASH_SENDERS', soft.join(','));
   props.deleteProperty('MIGRATE_HARD_TO_SOFT');
   Logger.log(`Migrated ${moved} sender(s) HARD -> SOFT. HARD=${stayInHard.length} SOFT=${soft.length}.`);
-}
-
-/**
- * v2.1.0 one-shot: demote the 5 senders that were auto-learned as HARD
- * during the 2026-05-21 production run but are actually dual-use
- * (Fireflies notifications, GCP billing, GitHub security, Oracle account,
- * Teams meeting reminders). Safe to re-run - already-migrated entries
- * are no-ops.
- */
-function applyV21Migration_oneshot() {
-  PropertiesService.getScriptProperties().setProperty(
-    'MIGRATE_HARD_TO_SOFT',
-    'sender@vendor.example,cloud@service.example,notifications@github.com,replies@vendor.example,noreply@teams.example'
-  );
-  migrateHardToSoft();
 }
 
 /**
