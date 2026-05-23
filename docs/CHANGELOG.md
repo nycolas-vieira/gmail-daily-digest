@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.4.0] - 2026-05-23
+
+### Added
+
+- **Opt-in email delivery of the report.** New `emailReport_(props, filename, md, driveUrl)` runs right after `saveReportToDrive_` inside `generateReport_`. When ScriptProperty `REPORT_EMAIL` is set, the same Markdown that was saved to Drive is sent via `MailApp.sendEmail` to that address, with the `.md` attached and a link back to the Drive file appended to the body. When `REPORT_EMAIL` is unset, behaviour is unchanged (Drive only, default since v2.0). Subject is `[gmail-organizer] <yyyy-MM-dd-HHh>`.
+
+### Fixed
+
+- **`generateReport_` no longer leaves stats accumulated when the post-save step fails.** The 2026-05-22 19h trigger crashed with an Apps Script INTERNAL error after the report was already saved to Drive: `resetStats_` hung for around 3 minutes and the function exited with Falha, so the counters for the next period inherited the previous period's totals. Both `emailReport_` and `resetStats_` are now individually wrapped in try/catch with timing logs, so a failure in one does not skip the other and the trigger always completes cleanly.
+
+### Changed
+
+- **`resetStats_` rewritten as a single batched `setProperties` call** instead of around 20 sequential `deleteProperty` round trips. Counters are now zeroed in place (`'0'` for numeric stats, `'[]'` for the JSON-array stats `STATS_ALERTS`, `STATS_SOFT_TRASH_ADDED`, `STATS_HARD_TRASH_ADDED`). This is functionally identical to the previous delete loop because `readStats_` already uses `|| '0'` / `|| '[]'` fallbacks, and it removes the per-key Properties round trips that were the likely root cause of the INTERNAL error above.
+
+### Migration notes
+
+- No config change required. To enable email delivery, set ScriptProperty `REPORT_EMAIL` to the target address. To keep the current behaviour (Drive only), leave it unset.
+
+---
+
 ## [2.3.0] - 2026-05-21
 
 ### Added

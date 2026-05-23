@@ -121,8 +121,42 @@ function generateReport_() {
   const file = saveReportToDrive_(filename, md);
   Logger.log(`[report] Saved: ${file.getUrl()}`);
 
-  // Reset period
-  resetStats_(props, now);
+  try {
+    emailReport_(props, filename, md, file.getUrl());
+  } catch (e) {
+    Logger.log(`[report] emailReport_ failed: ${e}`);
+  }
+
+  // Reset period. Wrapped because the 2026-05-22 19h trigger crashed
+  // here with an Apps Script INTERNAL error after the report was
+  // already saved; without the catch the function exits with Falha and
+  // counters stay accumulated. The single-call resetStats_ should make
+  // this nearly impossible, but the safety net stays cheap.
+  const resetStart = Date.now();
+  try {
+    resetStats_(props, now);
+    Logger.log(`[report] resetStats_ ok in ${Date.now() - resetStart}ms`);
+  } catch (e) {
+    Logger.log(`[report] resetStats_ failed in ${Date.now() - resetStart}ms: ${e}`);
+  }
+}
+
+// Opt-in email delivery. Set ScriptProperty REPORT_EMAIL to the address
+// you want the digest delivered to. If unset, only the Drive file is
+// produced (default behaviour since v2.0). Body is the same markdown
+// that was saved to Drive plus a link back to the Drive file.
+function emailReport_(props, filename, md, driveUrl) {
+  const recipient = props.getProperty('REPORT_EMAIL');
+  if (!recipient) return;
+  const subject = `[gmail-organizer] ${filename.replace(/\.md$/, '')}`;
+  const body = `${md}\n\n---\nDrive: ${driveUrl}\n`;
+  MailApp.sendEmail({
+    to: recipient,
+    subject: subject,
+    body: body,
+    attachments: [Utilities.newBlob(md, 'text/markdown', filename)],
+  });
+  Logger.log(`[report] Emailed to ${recipient}`);
 }
 
 /** Manual test - safe to run from the IDE. */
@@ -588,20 +622,31 @@ function readStats_(props) {
   return out;
 }
 
+// Single batched setProperties call instead of ~20 sequential
+// deleteProperty round trips. The 2026-05-22 19h trigger hung for ~3
+// minutes on the old per-key delete loop and then died with an Apps
+// Script INTERNAL error - the report had already been saved to Drive
+// but counters never reset, so the next period inherited stale data.
+// Zeroing in place is functionally identical to deleting (readStats_
+// uses `|| '0'` / `|| '[]'` fallbacks anyway) and finishes in one trip.
 function resetStats_(props, now) {
-  const keysToClear = [
-    'STATS_TRASHED_TOTAL', 'STATS_LABELED_TOTAL', 'STATS_LIXO_HARD', 'STATS_ALERTS',
-    'STATS_SOFT_TRASH_ADDED', 'STATS_HARD_TRASH_ADDED',
-  ];
+  const reset = {
+    STATS_PERIOD_START: now.toISOString(),
+    STATS_TRASHED_TOTAL: '0',
+    STATS_LABELED_TOTAL: '0',
+    STATS_LIXO_HARD: '0',
+    STATS_ALERTS: '[]',
+    STATS_SOFT_TRASH_ADDED: '[]',
+    STATS_HARD_TRASH_ADDED: '[]',
+  };
   for (const acct of CONFIG.ACCOUNTS) {
-    keysToClear.push(`STATS_TRASHED_${acct.name.toUpperCase()}`);
-    keysToClear.push(`STATS_ERRORS_${acct.name.toUpperCase()}`);
+    reset[`STATS_TRASHED_${acct.name.toUpperCase()}`] = '0';
+    reset[`STATS_ERRORS_${acct.name.toUpperCase()}`] = '0';
   }
   for (const label of Object.values(LABEL_NAMES)) {
-    keysToClear.push(`STATS_LABEL_${label.toUpperCase()}`);
+    reset[`STATS_LABEL_${label.toUpperCase()}`] = '0';
   }
-  keysToClear.forEach(k => props.deleteProperty(k));
-  props.setProperty('STATS_PERIOD_START', now.toISOString());
+  props.setProperties(reset);
 }
 
 // ============================================================
