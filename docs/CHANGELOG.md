@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.4.1] - 2026-05-23
+
+### Fixed
+
+- **Added OAuth scope `https://www.googleapis.com/auth/script.send_mail` to `appsscript.json`.** Without it, `emailReport_` from v2.4.0 throws `Exception: Specified permissions are not sufficient to call MailApp.sendEmail` and the report email is never delivered. Verified end-to-end on the 22:34 BRT manual run: report saved to Drive, email delivered, and `resetStats_` completed in 135ms. **Re-consent prompted on next run.**
+
+---
+
 ## [2.4.0] - 2026-05-23
 
 ### Added
