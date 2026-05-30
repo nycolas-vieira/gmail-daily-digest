@@ -51,11 +51,20 @@ const CONFIG = {
   // the sender is added to SOFT (not HARD) so the next email from that
   // sender is shown for review instead of being silently dropped. The user
   // promotes after confidence.
-  HARD_TRASH_SENDERS: (
-    PropertiesService.getScriptProperties().getProperty('HARD_TRASH_SENDERS')
-    || PropertiesService.getScriptProperties().getProperty('BLACK_LIST')
-    || ''
-  ).split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+  HARD_TRASH_SENDERS: [
+    // Built-in hard-trash list: senders confirmed 100% junk, committed
+    // to source so any clone of the project gets the same baseline.
+    // Add here when you keep deleting the same sender by hand. Dynamic
+    // additions via promoteSoftToHard() still go to the ScriptProperty
+    // (merged below), so the user-managed list keeps working.
+    'aliexpress',
+  ].concat(
+    (
+      PropertiesService.getScriptProperties().getProperty('HARD_TRASH_SENDERS')
+      || PropertiesService.getScriptProperties().getProperty('BLACK_LIST')
+      || ''
+    ).split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+  ),
 
   SOFT_TRASH_SENDERS: (PropertiesService.getScriptProperties().getProperty('SOFT_TRASH_SENDERS') || '')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
@@ -301,7 +310,8 @@ REGRAS DE CATEGORIZACAO (escolha exatamente UMA categoria por email):
 
 LIXO - APAGAR. Use AGRESSIVAMENTE quando o email e:
   - Propaganda/marketing puro (lojas tipo Shein, Natura, Catarse, OKX, Airbnb promo, Super Pizza Pan, etc).
-  - Notificacao repetida sem valor: GitHub PR review notifications, Jira ticket auto-updates, social network digests.
+  - Notificacao repetida sem valor: Jira ticket auto-updates, social network digests.
+  - GITHUB (notifications@github.com, noreply@github.com): por padrao TODO email do GitHub vai pra LIXO. Inclui: PR review notifications, comments em PRs/issues, push notifications, mentions em discussoes, CI/Actions status, Dependabot alerts, release notifications, novos seguidores, stars, forks, security advisories genericos. EXCECAO UNICA: PR review REQUEST (alguem pediu pra VOCE revisar um PR especificamente, subject tipico "review_requested" ou "requested your review on") -> isso e URGENTE ou PESSOAL (acao necessaria), NUNCA LIXO. Comentarios/respostas em PRs que voce ja revisou ou abriu = LIXO. Na duvida sobre "alguem me pediu review" vs "me notificou de algo": se o subject NAO contem "review requested" / "requested your review" / "review_requested" e nao tem assignment direto pedindo acao, e LIXO.
   - Invite passado: convite de evento cuja data ja passou.
   - Newsletter generica sem tema relevante (e.g. coupons platforms, Dribbble inspiration).
   - Renegociacao de divida que nao e do usuario, "acordo digital" cobranca generica.

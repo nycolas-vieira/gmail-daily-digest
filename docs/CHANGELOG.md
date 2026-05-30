@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.4.2] - 2026-05-30
+
+### Added
+
+- **Built-in `HARD_TRASH_SENDERS` baseline list in code.** Senders that
+  are 100% junk independent of which workspace clone is running can now
+  be committed to source instead of needing to be set via Script
+  Property on every deployment. First entry: `aliexpress`. The runtime
+  property `HARD_TRASH_SENDERS` and the legacy `BLACK_LIST` are still
+  read and concatenated, so existing user-managed additions
+  (`promoteSoftToHard()`, manual UI edits) are preserved verbatim.
+
+### Changed
+
+- **Gemini categorization prompt tightened for GitHub emails.** GitHub
+  notifications (notifications@github.com, noreply@github.com) now
+  default to LIXO unless the email is a direct PR review request
+  ("review_requested" / "requested your review on" / explicit
+  assignment). Comments on PRs you already opened/reviewed, CI status,
+  Dependabot, push notifications, social interactions, mentions in
+  discussions, security advisories - all LIXO. Mirrors the
+  `argus 2.4.1` gmail-fast-poll tightening so both ends of the email
+  pipeline drop GitHub noise consistently.
+
+---
+
 ## [2.4.1] - 2026-05-23
 
 ### Fixed
