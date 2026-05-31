@@ -21,7 +21,7 @@
 
 const CONFIG = {
   GEMINI_API_KEY: PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY'),
-  GEMINI_MODEL: 'gemini-2.5-flash',
+  GEMINI_MODEL: 'gemini-2.5-flash-lite',
   MAX_BODY_CHARS: 1200,
   MAX_EMAILS_PER_RUN: 80,
 
@@ -883,15 +883,21 @@ function safeParseJson_(text) {
 // ============================================================
 
 /**
- * Install all triggers used by v2: hourly cleanAndLabel_ + twice-daily report.
+ * Install all triggers used by v2: twice-daily cleanAndLabel_ + twice-daily report.
  * Safe to run multiple times - removes old triggers for these handlers first.
+ *
+ * Changed 2026-05-30: cleanAndLabel_ moved from everyHours(1) to 2x/day to cap
+ * Gemini API spend. With Flash-Lite model + 2x/day cadence, monthly cost
+ * stays under ~R$10 vs the previous ~R$100/mo at hourly + Flash.
  */
 function installTriggers() {
   removeAllTriggers();
-  ScriptApp.newTrigger('cleanAndLabel_').timeBased().everyHours(1).create();
+  // 2x/day cleanAndLabel: 07h e 19h BRT (same windows as the report).
+  ScriptApp.newTrigger('cleanAndLabel_').timeBased().atHour(7).everyDays(1).inTimezone(CONFIG.TZ).create();
+  ScriptApp.newTrigger('cleanAndLabel_').timeBased().atHour(19).everyDays(1).inTimezone(CONFIG.TZ).create();
   ScriptApp.newTrigger('generateReport_').timeBased().atHour(7).everyDays(1).inTimezone(CONFIG.TZ).create();
   ScriptApp.newTrigger('generateReport_').timeBased().atHour(19).everyDays(1).inTimezone(CONFIG.TZ).create();
-  Logger.log('Triggers installed: cleanAndLabel hourly + generateReport at 07/19h BRT.');
+  Logger.log('Triggers installed: cleanAndLabel 2x/day + generateReport 2x/day at 07/19h BRT.');
 }
 
 function removeAllTriggers() {

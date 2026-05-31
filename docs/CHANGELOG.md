@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.5.0] - 2026-05-30 - cost cut pre end-of-trial
+
+Free Trial expira em 10 dias e o billing report mostrou ~R$6/dia em
+Gemini API (projetando R$180/mo se mantivesse hourly + Flash). Cut
+agressivo pra cair pra ~R$5-10/mo total: model downgrade pra Flash-Lite
++ schedule reduzido pra 2x/dia.
+
+### Changed
+- `GEMINI_MODEL` migrado de `gemini-2.5-flash` para
+  `gemini-2.5-flash-lite`. Mesmo prompt + responseSchema; Lite tem
+  precisao suficiente pra categorizacao + tagging. Custo 5-10x menor.
+- `installTriggers()`: `cleanAndLabel_` migrou de `everyHours(1)` para
+  `atHour(7).everyDays(1)` + `atHour(19).everyDays(1)` no fuso
+  `CONFIG.TZ`. Roda nas mesmas janelas que `generateReport_`. Reduz
+  invocacoes/dia de 24 para 2 (12x menos chamadas, 12x menos cost).
+- Comentario do bloco TRIGGER SETUP atualizado com a razao da mudanca
+  e a projecao de custo esperada.
+
+### Operational
+- User precisa rodar `installTriggers` uma vez via Apps Script UI
+  (Run dropdown) ou via `clasp run installTriggers` se a Apps Script
+  API estiver habilitada na conta. Sem isso o trigger antigo
+  (everyHours(1)) continua ativo apesar do code novo. Confirmacao via
+  Logger.log: "Triggers installed: cleanAndLabel 2x/day + generateReport
+  2x/day at 07/19h BRT."
+
+---
+
 ## [2.4.2] - 2026-05-30
 
 ### Added
