@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2.5.1] - 2026-06-04 - github zero-Gemini hard-trash
+
+Continuacao do cost cut: o GitHub era de longe o maior volume de email
+ruido (455 numa unica rodada no personal) e cada um pagava uma chamada
+Gemini so pra ser classificado como LIXO. Agora github e hard-trashed por
+sender, antes de qualquer chamada ao Flash-Lite. Politica definida pelo
+Nyc: nenhuma notificacao do GitHub e util na inbox (ele e chamado
+pessoalmente para reviews reais).
+
+### Changed
+- `HARD_TRASH_SENDERS` (built-in list): adicionado `github.com`. O
+  `isHardTrash_` casa por `includes()`, entao pega `notifications@github.com`
+  e `noreply@github.com`. Resultado: todo email do GitHub vai pra Lixeira
+  em `processAccount_` (passo 3) ANTES de entrar no chunk do Gemini -> zero
+  custo de API para github.
+- Regra de GitHub no prompt do Gemini reduzida de um paragrafo para uma
+  linha (rede de seguranca apenas; github normalmente nem chega ao Gemini).
+  Economiza tokens de input em toda chamada.
+
+### Fixed
+- Comentario de cabecalho do `Code.gs` corrigido: `cleanAndLabel_` roda
+  `07:00 e 19:00 BRT`, nao `hourly` (estava stale desde a mudanca 2.5.0).
+
+---
+
 ## [2.5.0] - 2026-05-30 - cost cut pre end-of-trial
 
 Free Trial expira em 10 dias e o billing report mostrou ~R$6/dia em

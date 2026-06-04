@@ -3,7 +3,7 @@
 // Roda no Apps Script GCP, multi-conta via OAuth refresh tokens.
 //
 // Jobs:
-//   - cleanAndLabel_() (hourly): categoriza com Gemini e aplica acoes
+//   - cleanAndLabel_() (07:00 e 19:00 BRT): categoriza com Gemini e aplica acoes
 //     (Trash, Label) em emails da inbox de todas as contas. Persiste
 //     contadores em ScriptProperties.
 //   - generateReport_() (07:00 e 19:00 BRT): consolida contadores
@@ -58,6 +58,11 @@ const CONFIG = {
     // additions via promoteSoftToHard() still go to the ScriptProperty
     // (merged below), so the user-managed list keeps working.
     'aliexpress',
+    // github.com (notifications@ e noreply@): 100% trash, SEM chamar Gemini.
+    // Politica 2026-06-04 (Nyc): nenhuma notificacao do GitHub e util na inbox
+    // e mandar cada uma pro Gemini era custo puro (455 emails so no personal).
+    // O isHardTrash_ casa por includes(), entao 'github.com' pega ambos senders.
+    'github.com',
   ].concat(
     (
       PropertiesService.getScriptProperties().getProperty('HARD_TRASH_SENDERS')
@@ -311,7 +316,7 @@ REGRAS DE CATEGORIZACAO (escolha exatamente UMA categoria por email):
 LIXO - APAGAR. Use AGRESSIVAMENTE quando o email e:
   - Propaganda/marketing puro (lojas tipo Shein, Natura, Catarse, OKX, Airbnb promo, Super Pizza Pan, etc).
   - Notificacao repetida sem valor: Jira ticket auto-updates, social network digests.
-  - GITHUB (notifications@github.com, noreply@github.com): por padrao TODO email do GitHub vai pra LIXO. Inclui: PR review notifications, comments em PRs/issues, push notifications, mentions em discussoes, CI/Actions status, Dependabot alerts, release notifications, novos seguidores, stars, forks, security advisories genericos. EXCECAO UNICA: PR review REQUEST (alguem pediu pra VOCE revisar um PR especificamente, subject tipico "review_requested" ou "requested your review on") -> isso e URGENTE ou PESSOAL (acao necessaria), NUNCA LIXO. Comentarios/respostas em PRs que voce ja revisou ou abriu = LIXO. Na duvida sobre "alguem me pediu review" vs "me notificou de algo": se o subject NAO contem "review requested" / "requested your review" / "review_requested" e nao tem assignment direto pedindo acao, e LIXO.
+  - GITHUB (qualquer email de github.com): 100% LIXO, sem excecao (rede de seguranca; normalmente ja e hard-trashed antes do Gemini).
   - Invite passado: convite de evento cuja data ja passou.
   - Newsletter generica sem tema relevante (e.g. coupons platforms, Dribbble inspiration).
   - Renegociacao de divida que nao e do usuario, "acordo digital" cobranca generica.
