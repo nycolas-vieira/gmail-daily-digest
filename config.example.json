@@ -1,0 +1,22 @@
+{
+  "oauth": {
+    "client_id": "FILL_FROM_GOOGLE_OAUTH_CLIENT",
+    "client_secret": "FILL_FROM_GOOGLE_OAUTH_CLIENT"
+  },
+  "accounts": [
+    {
+      "name": "personal",
+      "email": "you@gmail.com",
+      "refresh_token": "FILL_PER_ACCOUNT"
+    }
+  ],
+  "ollama": {
+    "endpoint": "http://localhost:11434",
+    "model": "qwen2.5:7b"
+  },
+  "blocklist_path": "~/.config/gmail-cli/organizer-blocklist.json",
+  "state_path": "~/.config/gmail-daily-digest/state.json",
+  "report_dir": "~/.config/gmail-daily-digest/reports",
+  "max_emails_per_run": 80,
+  "max_body_chars": 1200
+}

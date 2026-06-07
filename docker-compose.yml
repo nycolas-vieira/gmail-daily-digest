@@ -1,0 +1,50 @@
+# Local, self-managed runtime for gmail-daily-digest V3.
+#
+#   ollama     - the local model server (own image, own model volume)
+#   organizer  - the Go binary, run on demand as a one-shot batch job
+#
+# The repo is PUBLIC: no secret is baked into any image. config.json is
+# bind-mounted read-only at runtime; the only writable host paths are the
+# blocklist file (auto-learn) and the data dir (state.json + reports).
+#
+# First time:
+#   docker compose up -d ollama
+#   docker compose exec ollama ollama pull qwen2.5:7b
+#
+# Run (UID/GID make the container write files as you, not root):
+#   UID=$(id -u) GID=$(id -g) docker compose run --rm organizer            # organize
+#   UID=$(id -u) GID=$(id -g) docker compose run --rm organizer -dry-run   # dry-run
+#   UID=$(id -u) GID=$(id -g) docker compose run --rm organizer -report    # digest + reset
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gdd-ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  organizer:
+    build: .
+    image: gmail-daily-digest:3.0.0
+    depends_on:
+      - ollama
+    # Write files as the invoking host user (override with UID/GID env).
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      HOME: /data
+      OLLAMA_ENDPOINT: http://ollama:11434
+    volumes:
+      # config.json (secrets) - read-only, never copied into the image.
+      - ./config.json:/app/config.json:ro
+      # Only the blocklist file is shared from gmail-cli (auto-learn writes it),
+      # so credentials.json / pickles / gemini-key are NOT exposed to the container.
+      - ${GMAIL_CLI_DIR:-${HOME}/.config/gmail-cli}/organizer-blocklist.json:/data/.config/gmail-cli/organizer-blocklist.json
+      # state.json + rendered reports land here on the host.
+      - ${DIGEST_DATA_DIR:-${HOME}/.config/gmail-daily-digest}:/data/.config/gmail-daily-digest
+    command: ["-config", "/app/config.json"]
+
+volumes:
+  ollama-models:

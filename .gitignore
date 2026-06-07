@@ -19,8 +19,14 @@ creds.json
 credentials.json
 token.json
 
+# V3 local runtime config (secrets: OAuth client + refresh tokens) and state.
+# config.example.json IS committed; config.json is NOT.
+config.json
+state.json
+
 # Environment variables
 .env
 
 # Playwright MCP
 .playwright-mcp/
+docs/SESSIONS.md

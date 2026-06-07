@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.0.0] - 2026-06-06 - port para Go local + Ollama (aposenta o GAS)
+
+Reescrita completa do runtime. O organizador sai do Google Apps Script +
+Gemini e passa a ser um binário Go que roda **localmente** e classifica
+com um modelo **Ollama** (`qwen2.5:7b`). Motivação: zero custo de API,
+zero quota, privacidade (o conteúdo do email nunca sai da máquina) e o
+fim da dependência do trial do Gemini. O repo é público, então nenhum
+segredo vive no código: a config de runtime é reconstruída localmente.
+
+### Added
+- Binário Go (`main.go`) com modos: organizar (default), `-dry-run`,
+  `-report` (renderiza o digest do período e reseta), `-reset`.
+- `internal/config`: loader do `config.json` (falha alto, sem fallbacks) +
+  blocklist de duas camadas (HARD auto-trash, SOFT label `Revisar`,
+  auto-learn de LIXO para SOFT). Built-in HARD: `aliexpress`, `github.com`.
+- `internal/gmail`: cliente REST enxuto (list/get/trash/modify/labels) +
+  troca de refresh token por access token + strip de HTML.
+- `internal/classify`: classificador Ollama com **structured outputs**
+  (schema JSON fixo) e classificação **um email por vez** (principal alavanca
+  de qualidade num modelo pequeno). Prompt de categorização reescrito.
+- `internal/organizer`: pipeline por conta (porte de `processAccount_`).
+- `internal/report`: estado de período em `state.json` local (substitui as
+  ScriptProperties) + render do digest em Markdown.
+- `config.example.json` e `scripts/bootstrap-config.sh`: gera o `config.json`
+  git-ignored lendo o OAuth client de `~/.config/gmail-cli/credentials.json`
+  e os refresh tokens dos `token.pickle` por conta.
+- **Docker:** `Dockerfile` (multi-stage, binário estático + runtime distroless),
+  `docker-compose.yml` (serviço `ollama` + serviço `organizer` one-shot) e
+  `.dockerignore`. Nenhum segredo entra na imagem: `config.json` é bind-mount
+  read-only; só o arquivo da blocklist e o data dir (state + reports) são
+  graváveis. Override de env `OLLAMA_ENDPOINT`/`OLLAMA_MODEL` deixa a mesma
+  `config.json` rodar dentro e fora do container.
+- README reescrito para a arquitetura local Go + Ollama (+ seção Docker).
+
+### Changed
+- Categorias e rótulos consolidados: `LIXO`, `CONTAS`, `NEWSLETTER`,
+  `URGENTE`, `PESSOAL`, `DOCUMENTO`, `OUTROS`. URGENTE e PESSOAL ficam na
+  inbox; CONTAS/NEWSLETTER/DOCUMENTO/OUTROS são arquivados após rotular.
+- `.gitignore`: ignora `config.json` e `state.json` (o `config.example.json`
+  é versionado). A blocklist segue em `~/.config/gmail-cli` (fora do repo).
+
+### Removed
+- `Code.gs`, `appsscript.json`, `.clasp.json`, `.claspignore`, `v1-legacy/`.
+  O runtime GAS está aposentado. O histórico permanece no git (último em
+  `v2.5.1`, commit `1fef9eb`); reverter = restaurar esses arquivos e
+  `clasp push`.
+
+---
+
 ## [2.5.1] - 2026-06-04 - github zero-Gemini hard-trash
 
 Continuacao do cost cut: o GitHub era de longe o maior volume de email

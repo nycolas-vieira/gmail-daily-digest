@@ -1,0 +1,22 @@
+# SECURITY: this repo is public and the runtime config holds secrets.
+# Never copy them into the build context / image. config.json is mounted.
+config.json
+state.json
+*.pickle
+.env
+credentials.json
+creds.json
+token.json
+*.json.bak
+
+# Not needed in the image
+.git
+.gitignore
+.github
+.playwright-mcp/
+docs/
+README.md
+v1-legacy/
+.vscode/
+.idea/
+.DS_Store
