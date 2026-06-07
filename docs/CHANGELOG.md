@@ -40,6 +40,9 @@ segredo vive no código: a config de runtime é reconstruída localmente.
   graváveis. Override de env `OLLAMA_ENDPOINT`/`OLLAMA_MODEL` deixa a mesma
   `config.json` rodar dentro e fora do container.
 - README reescrito para a arquitetura local Go + Ollama (+ seção Docker).
+- Log por decisão no organizer (categoria + razão curta + assunto truncado),
+  valendo em dry-run e run real. Essencial pra inspecionar a qualidade da
+  classificação sem abrir o Gmail.
 
 ### Changed
 - Categorias e rótulos consolidados: `LIXO`, `CONTAS`, `NEWSLETTER`,

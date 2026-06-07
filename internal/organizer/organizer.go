@@ -140,6 +140,7 @@ func (o *Organizer) processAccount(ctx context.Context, acct config.Account) err
 }
 
 func (o *Organizer) applyDecision(client *gmail.Client, m *gmail.Message, acct config.Account, d classify.Decision, labelMap map[string]string) {
+	log.Printf("[%s] %-10s %s | %s", acct.Name, d.Category, truncate(d.Reason, 70), truncate(m.Header("Subject"), 60))
 	if d.Category == "LIXO" {
 		o.act(client, "trash", m, acct, false, "")
 		o.learnSoft(acct, m.Header("From"))
@@ -221,6 +222,14 @@ func (o *Organizer) act(client *gmail.Client, kind string, m *gmail.Message, acc
 		}
 		o.st.AddLabeled(labelName)
 	}
+}
+
+func truncate(s string, n int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) > n {
+		return s[:n] + "…"
+	}
+	return s
 }
 
 func quoteLabel(name string) string {
