@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.1.1] - 2026-06-15 - prompt do 4b, schedule 4x/dia, escrita atômica, limpeza do SOFT
+
+Follow-up do 3.1.0 (mesmo dia). Decisão: fica no `gemma3:4b`, melhora-se o
+filtro. Cadência passa a 4x/dia. Sessões: S-20260615-05..08 (+ fecha S-20260610-01).
+
+### Changed
+- `internal/classify`: `systemPrompt` reescrito - procedimento de decisão por
+  prioridade (pare na 1ª que casar, pra consistência), CONTAS apertado (só
+  dinheiro concreto do usuário; NÃO product-update/newsletter/aviso), regras
+  explícitas dos erros conhecidos do 4b e 9 exemplos few-shot. Decisão de manter
+  o `gemma3:4b` e investir no prompt em vez de voltar pro 12b. (S-20260615-06, S-20260610-01)
+- `scripts/launchd/`: cadência de hourly+2x/dia para **4x/dia a cada 6h** -
+  organize 00/06/12/18:00, report 00/06/12/18:30. (S-20260615-07)
+
+### Fixed
+- Escrita atômica em `internal/config.Blocklist.Save` e `report.State.Save`
+  (`os.CreateTemp` único + `os.Rename`): elimina truncamento/leitura-parcial sob
+  escritores concorrentes. Bug observado ao vivo - um run do organize clobберou
+  promoções de HARD feitas em paralelo. Aposentado o port Python legado
+  `~/bin/gmail-organizer` (segundo dono do mesmo arquivo de blocklist). (S-20260615-08)
+
+### Removed
+- 42 senders de marketing/promo/social promovidos de SOFT para HARD (auto-trash):
+  Facebook (friendsuggestion/memories/priority notification), promos de varejo e
+  eventos (asics, shein, amazon store-news, ifood news, decolar, playstation,
+  netflix join, websummit, startup summit promo, etc.), surveys e relacionamento.
+  Banco/financeiro e contas de SaaS/dev foram **deixados em SOFT** de propósito
+  (risco de auto-trash em mail legítimo). (S-20260615-05)
+
 ## [3.1.0] - 2026-06-15 - entrega do report (email + Echo/Telegram), launchd e guarda de self-mail
 
 O modo `-report` deixa de ser só um arquivo no vault: agora entrega o digest

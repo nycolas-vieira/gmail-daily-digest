@@ -156,7 +156,11 @@ func (b *Blocklist) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(b.path, raw, 0o600)
+	// Atomic write: a concurrent writer (the launchd organize run learning a
+	// SOFT sender while a -promote edits the file) must never see a truncated
+	// or half-written blocklist. Unique temp + rename gives each writer its own
+	// scratch file and an all-or-nothing publish.
+	return writeFileAtomic(b.path, raw, 0o600)
 }
 
 func subtractBuiltins(hard []string) []string {

@@ -159,6 +159,33 @@ func (c *Config) validate() error {
 	return nil
 }
 
+// writeFileAtomic writes data to a unique temp file in the target directory
+// and renames it into place. rename(2) is atomic on the same filesystem, so a
+// reader never observes a partial file and two concurrent writers each get
+// their own temp (last rename wins cleanly, no truncation). Used by the
+// blocklist and state writers, which can be hit by overlapping runs.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // no-op once renamed
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Chmod(perm); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
 func expandHome(p string) string {
 	if p == "" {
 		return p

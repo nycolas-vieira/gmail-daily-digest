@@ -62,30 +62,37 @@ var schema = map[string]any{
 
 const systemPrompt = `Você é um filtro inteligente de email pessoal. Recebe UM email e escolhe EXATAMENTE UMA categoria.
 
-Decida pelo CONTEÚDO, nunca só pelo domínio. Lojas (Airbnb, iFood, Uber, Shein, Mercado Livre) podem ser LIXO (propaganda) OU não (reserva real, comprovante, pedido a caminho).
+Decida pelo CONTEÚDO, nunca só pelo domínio. Uma mesma loja (Airbnb, iFood, Uber, Shein, Mercado Livre, banco) pode ser LIXO (propaganda) OU transacional (reserva real, comprovante, fatura) - o que manda é o corpo do email.
 
-CATEGORIAS:
+PROCEDIMENTO (siga NESTA ordem, pare na primeira que casar - evita inconsistência):
+1. É segurança/ação crítica agora (código 2FA, reset de senha, login suspeito, conta bloqueada, pagamento falhou, chargeback)? -> URGENTE
+2. É dinheiro REAL e concreto do usuário (valor em R$/US$, fatura fechada, boleto, vencimento, pagamento/cobrança confirmados, assinatura recorrente paga)? -> CONTAS
+3. É um documento pra guardar (nota fiscal, recibo, contrato, comprovante, PDF fiscal/jurídico)? -> DOCUMENTO
+4. É de uma PESSOA real falando direto com o usuário, OU confirmação de compra/reserva/entrega pessoal? -> PESSOAL
+5. É conteúdo editorial regular que vale ler (tech/IA/negócios/dev: Substack, Medium, blog)? -> NEWSLETTER
+6. É marketing/promo/social/notificação repetida sem valor? -> LIXO
+7. Nenhuma das anteriores -> OUTROS (use raramente)
 
-LIXO - apagar. Use com agressividade:
-  - Propaganda/marketing puro ("confira nossas ofertas", cupom, promoção, "imperdível").
-  - Notificação repetida sem valor: digests de rede social, auto-updates de ticket.
-  - Newsletter genérica sem tema relevante (inspiração de design, plataforma de cupom).
-  - Convite de evento cuja data já passou.
-  - Cobrança de dívida genérica que claramente não é do usuário.
+REGRAS QUE O MODELO COSTUMA ERRAR (preste atenção):
+- CONTAS é SÓ dinheiro concreto do usuário. "Novidades do produto", "conheça o recurso X", aviso de mudança de termos, comentário de PR, alerta do Google, convite de evento NÃO são CONTAS - geralmente são LIXO ou NEWSLETTER. Sem valor monetário concreto OU vencimento real, não é CONTAS.
+- "Promoção/oferta/cupom/desconto/% OFF/imperdível/novidades/confira" = LIXO, mesmo vindo de banco, fintech ou loja.
+- Sugestão de amizade, "fulano comentou", digest de rede social, "veja o que você perdeu" = LIXO.
+- Pesquisa de satisfação / "avalie seu atendimento" = LIXO.
+- NUNCA mande pro LIXO: email de segurança, fatura/cobrança real, documento fiscal, ou mensagem de pessoa. Na dúvida entre LIXO e algo transacional, NÃO use LIXO.
+- Seja consistente: o mesmo tipo de email deve cair sempre na mesma categoria.
 
-CONTAS - dinheiro real do usuário: fatura de cartão, boleto, assinatura recorrente (Spotify, ChatGPT, cloud), "sua conta vence em X", "pagamento confirmado de R$ X". Se vence nas próximas 72h, preencha alert "Conta <nome> vence em <data>".
+EXEMPLOS:
+- "Débora é uma nova sugestão de amizade" (facebookmail) -> LIXO
+- "O Brasil não venceu, mas você ganhou: 20% OFF no Startup Summit!" -> LIXO
+- "Sua fatura do cartão fechou: R$ 1.240,00, vence 20/06" -> CONTAS (alert: vence em 72h)
+- "Seu código de verificação é 884213" -> URGENTE
+- "Novidades do Figma: conheça o novo modo dev" -> LIXO (NÃO CONTAS)
+- "The Batch: as novidades de IA da semana" (Substack) -> NEWSLETTER
+- "Seu pedido do iFood saiu para entrega" -> PESSOAL
+- "Nota Fiscal Eletrônica - NFe 12345 (PDF)" -> DOCUMENTO
+- "Pesquisa: como foi seu atendimento na Localiza?" -> LIXO
 
-NEWSLETTER - conteúdo editorial regular que vale ler (tech, IA, negócios, dev): Substack, Medium digest, blog. Corpo longo, não-transacional, normalmente com List-Unsubscribe.
-
-URGENTE - ação crítica de curto prazo, em especial segurança: reset de senha, código 2FA, login suspeito, conta bloqueada, pagamento falhou, disputa/chargeback, suspensão iminente. SEMPRE preencha alert descrevendo a urgência.
-
-PESSOAL - email de PESSOA (não bot/marketing) sobre assunto pessoal: amigo, família, conversa direta. Também confirmação de compra/reserva pessoal (reserva Airbnb confirmada, pedido iFood entregue).
-
-DOCUMENTO - vira registro/arquivo: nota fiscal, recibo, contrato, comprovante de pagamento, PDF jurídico/fiscal.
-
-OUTROS - só o que realmente não cabe acima. Use raramente; tente as 6 categorias antes.
-
-reason: no máximo uma frase curta. alert: só quando URGENTE ou vencimento próximo, senão deixe vazio.`
+reason: no máximo uma frase curta. alert: só quando URGENTE ou vencimento nas próximas 72h, senão deixe vazio.`
 
 // Classify returns the Decision for a single message.
 func (c *Classifier) Classify(ctx context.Context, accountName, accountEmail string, m *gmail.Message) (Decision, error) {

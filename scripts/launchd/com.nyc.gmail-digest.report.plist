@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  gmail-daily-digest V3 - twice-daily report pass (launchd).
+  gmail-daily-digest V3 - report pass (launchd), 4x/day every 6h.
 
-  Replaces the old crontab line "40 7,19 * * * ... -report".
+  Replaces the old crontab line "40 7,19 * * * ... -report". Cadence decided
+  2026-06-15: 4 digests/day at 00:30, 06:30, 12:30, 18:30 - 30 min after each
+  organize slot (00/06/12/18) so the digest reflects that run's actions.
 
-  Fires at 07:40 and 19:40 local time. If the Mac was asleep at the slot,
-  launchd runs it once on wake (cron silently skipped it - that is the bug
-  this migration fixes). Calls the wrapper with the -report flag so the
-  organizer renders the digest and resets counters.
+  If the Mac was asleep at the slot, launchd runs it once on wake (cron
+  silently skipped it - that is the bug this migration fixes). Calls the
+  wrapper with -report so the organizer renders the digest and resets counters.
 
   Install: copy to ~/Library/LaunchAgents/ then `launchctl load -w`.
   See scripts/launchd/README.md for the full procedure.
@@ -25,21 +26,13 @@
         <string>-report</string>
     </array>
 
-    <!-- Two calendar slots: 07:40 and 19:40 local time. -->
+    <!-- 00:30, 06:30, 12:30, 18:30 local time (30 min after each organize). -->
     <key>StartCalendarInterval</key>
     <array>
-        <dict>
-            <key>Hour</key>
-            <integer>7</integer>
-            <key>Minute</key>
-            <integer>40</integer>
-        </dict>
-        <dict>
-            <key>Hour</key>
-            <integer>19</integer>
-            <key>Minute</key>
-            <integer>40</integer>
-        </dict>
+        <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
     </array>
 
     <key>RunAtLoad</key>

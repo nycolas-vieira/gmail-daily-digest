@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -76,7 +77,33 @@ func (s *State) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, raw, 0o600)
+	// Atomic write (unique temp + rename): an organize run saving state must
+	// never leave a truncated state.json behind for the next run to choke on.
+	return writeFileAtomic(s.path, raw, 0o600)
+}
+
+// writeFileAtomic writes data to a unique temp file in the target directory
+// then renames it into place. rename(2) is atomic on the same filesystem, so a
+// reader never sees a partial file and overlapping writers do not corrupt it.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // no-op once renamed
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Chmod(perm); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // Reset clears the counters and starts a new period at now, then saves.
