@@ -14,6 +14,12 @@
     "endpoint": "http://localhost:11434",
     "model": "qwen2.5:7b"
   },
+  "report": {
+    "email": "",
+    "from_account": "personal",
+    "argus_webhook_url": "",
+    "argus_webhook_secret": ""
+  },
   "blocklist_path": "~/.config/gmail-cli/organizer-blocklist.json",
   "state_path": "~/.config/gmail-daily-digest/state.json",
   "report_dir": "~/.config/gmail-daily-digest/reports",

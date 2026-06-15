@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  gmail-daily-digest V3 - twice-daily report pass (launchd).
+
+  Replaces the old crontab line "40 7,19 * * * ... -report".
+
+  Fires at 07:40 and 19:40 local time. If the Mac was asleep at the slot,
+  launchd runs it once on wake (cron silently skipped it - that is the bug
+  this migration fixes). Calls the wrapper with the -report flag so the
+  organizer renders the digest and resets counters.
+
+  Install: copy to ~/Library/LaunchAgents/ then `launchctl load -w`.
+  See scripts/launchd/README.md for the full procedure.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nyc.gmail-digest.report</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/nycolasvieira/repos/gmail-daily-digest/scripts/run-organizer.sh</string>
+        <string>-report</string>
+    </array>
+
+    <!-- Two calendar slots: 07:40 and 19:40 local time. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>7</integer>
+            <key>Minute</key>
+            <integer>40</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>19</integer>
+            <key>Minute</key>
+            <integer>40</integer>
+        </dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/nycolasvieira/.local/logs/gmail-daily-digest.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/nycolasvieira/.local/logs/gmail-daily-digest.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/Applications/Docker.app/Contents/Resources/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

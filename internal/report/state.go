@@ -23,6 +23,7 @@ type State struct {
 	Alerts          []string       `json:"alerts"`
 	SoftTrashAdded  []string       `json:"soft_trash_added"`
 	HardTrashAdded  []string       `json:"hard_trash_added"`
+	RevisarSenders  []string       `json:"revisar_senders"` // SOFT-matched senders seen this period
 
 	path string
 }
@@ -90,6 +91,7 @@ func (s *State) Reset(now time.Time) error {
 	s.Alerts = nil
 	s.SoftTrashAdded = nil
 	s.HardTrashAdded = nil
+	s.RevisarSenders = nil
 	return s.Save()
 }
 
@@ -124,3 +126,12 @@ func (s *State) AddAlert(a string) {
 
 func (s *State) AddSoftLearned(addr string)  { s.SoftTrashAdded = append(s.SoftTrashAdded, addr) }
 func (s *State) AddHardPromoted(addr string) { s.HardTrashAdded = append(s.HardTrashAdded, addr) }
+
+// AddRevisarSender records a SOFT-matched sender that got the "Revisar"
+// label this period. The deduped list feeds the report's promote-to-HARD
+// suggestion. addr is the bare sender address.
+func (s *State) AddRevisarSender(addr string) {
+	if addr != "" {
+		s.RevisarSenders = append(s.RevisarSenders, addr)
+	}
+}

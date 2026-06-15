@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.1.0] - 2026-06-15 - entrega do report (email + Echo/Telegram), launchd e guarda de self-mail
+
+O modo `-report` deixa de ser só um arquivo no vault: agora entrega o digest
+por email e empurra pro Echo/Telegram, com a lista de senders SOFT pra promover
+a HARD. Agendamento migra de cron pra launchd (recupera runs perdidos quando o
+Mac dorme) rodando via Docker. Sessões: S-20260615-01..04.
+
+### Added
+- `internal/deliver`: entrega do digest por **email** (HTML, via Gmail
+  `messages/send`) e **push pro Echo/Telegram** (POST pro argus-webhook
+  `/gmail-organizer/<secret>` -> Firestore -> Echo). Ambos best-effort e
+  opcionais: canal não configurado é pulado, falha é logada e NÃO bloqueia o
+  reset do período. (S-20260615-02, S-20260615-03)
+- `gmail.Send(from, to, subject, htmlBody)` (escopo `gmail.send` já concedido).
+- Bloco `report` no config (`email`, `from_account`, `argus_webhook_url`,
+  `argus_webhook_secret`) + overrides por env (`REPORT_EMAIL`,
+  `ARGUS_WEBHOOK_URL`, `ARGUS_WEBHOOK_SECRET`) pra rodar no Docker.
+- Comando `gmail-daily-digest -promote <addr>`: move um sender de SOFT pra HARD
+  (auto-trash). O digest sugere candidatos (os senders que bateram em "Revisar"
+  no período). (S-20260615-02)
+- `internal/report.State.RevisarSenders`: rastreio dos senders SOFT do período
+  pra alimentar a sugestão de promoção.
+- `scripts/run-organizer.sh` + plists launchd (`scripts/launchd/`): agendamento
+  via launchd rodando o organizer por Docker, apontado pro Ollama do host
+  (`host.docker.internal`), com espera de rede. (S-20260615-01)
+- Testes: `internal/deliver`, `internal/config/promote`, `internal/organizer`.
+
+### Changed
+- `docker-compose.yml`: `OLLAMA_ENDPOINT` agora interpola do ambiente
+  (`${OLLAMA_ENDPOINT:-http://ollama:11434}`) pra um export do host vencer; e o
+  `report_dir` (vault inbox) passa a ser montado no container pra o markdown não
+  se perder. (S-20260615-01)
+- README: seção de entrega do report, comando `-promote`, e nota de que o
+  `HARD: N` do report inclui os 2 builtins (`aliexpress`, `github.com`) - não é
+  perda de dados (esclarecimento da investigação S-20260615-04).
+
+### Fixed
+- Self-mail: o email de relatório é auto-enviado (personal->personal) e o
+  organizer passava a classificá-lo; um modelo pequeno (gemma3:4b) chegou a
+  marcá-lo como LIXO e a aprender o próprio endereço do usuário no SOFT. Guarda
+  `isOwn()` no organizer: mail de qualquer conta própria nunca é
+  classificado/lixado/aprendido - é rotulado PESSOAL e mantido. (S-20260615-02)
+
 ## [3.0.0] - 2026-06-06 - port para Go local + Ollama (aposenta o GAS)
 
 Reescrita completa do runtime. O organizador sai do Google Apps Script +

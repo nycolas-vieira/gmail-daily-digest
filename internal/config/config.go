@@ -30,15 +30,46 @@ type Ollama struct {
 	Model    string `json:"model"`
 }
 
+// Report holds the optional delivery channels for the period digest. Every
+// field is optional: an empty channel is simply skipped (the markdown file
+// in report_dir is always written regardless). Secrets can be injected via
+// env (REPORT_EMAIL / ARGUS_WEBHOOK_URL / ARGUS_WEBHOOK_SECRET) so the same
+// config.json can run unchanged inside Docker.
+type Report struct {
+	// Email is the recipient of the digest mail. Empty -> no email sent.
+	Email string `json:"email"`
+	// FromAccount is the configured account NAME used to send the mail
+	// (must exist in Accounts and carry the gmail.send scope). Empty
+	// defaults to "personal".
+	FromAccount string `json:"from_account"`
+	// ArgusWebhookURL is the argus-webhook gmail endpoint base, e.g.
+	// https://<run-url>/gmail (the secret is appended as the last path
+	// segment). Empty -> no Echo/Telegram push.
+	ArgusWebhookURL string `json:"argus_webhook_url"`
+	// ArgusWebhookSecret is the URL-safe path secret for that endpoint.
+	ArgusWebhookSecret string `json:"argus_webhook_secret"`
+}
+
 type Config struct {
 	OAuth           OAuth     `json:"oauth"`
 	Accounts        []Account `json:"accounts"`
 	Ollama          Ollama    `json:"ollama"`
+	Report          Report    `json:"report"`
 	BlocklistPath   string    `json:"blocklist_path"`
 	StatePath       string    `json:"state_path"`
 	ReportDir       string    `json:"report_dir"`
 	MaxEmailsPerRun int       `json:"max_emails_per_run"`
 	MaxBodyChars    int       `json:"max_body_chars"`
+}
+
+// AccountByName returns the configured account with the given name, or nil.
+func (c *Config) AccountByName(name string) *Account {
+	for i := range c.Accounts {
+		if c.Accounts[i].Name == name {
+			return &c.Accounts[i]
+		}
+	}
+	return nil
 }
 
 // Load reads and validates config.json. Every field that the rest of the
@@ -75,6 +106,20 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("OLLAMA_MODEL"); v != "" {
 		c.Ollama.Model = v
+	}
+
+	// Report delivery secrets can come from env (preferred inside Docker).
+	if v := os.Getenv("REPORT_EMAIL"); v != "" {
+		c.Report.Email = v
+	}
+	if v := os.Getenv("ARGUS_WEBHOOK_URL"); v != "" {
+		c.Report.ArgusWebhookURL = v
+	}
+	if v := os.Getenv("ARGUS_WEBHOOK_SECRET"); v != "" {
+		c.Report.ArgusWebhookSecret = v
+	}
+	if c.Report.FromAccount == "" {
+		c.Report.FromAccount = "personal"
 	}
 
 	if err := c.validate(); err != nil {

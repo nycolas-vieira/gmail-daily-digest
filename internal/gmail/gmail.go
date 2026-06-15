@@ -212,6 +212,26 @@ func (c *Client) ApplyLabel(id, labelID string, archive bool) error {
 	return c.post(u, body)
 }
 
+// Send delivers an HTML email from the authenticated account. The OAuth
+// token must carry the gmail.send scope (it does: readonly+send+modify).
+// Used by the report mode to mail the period digest to the user.
+func (c *Client) Send(from, to, subject, htmlBody string) error {
+	// Encode the Subject per RFC 2047 so accents survive (e.g. "Revisão").
+	encSubject := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(subject)) + "?="
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "From: %s\r\n", from)
+	fmt.Fprintf(&msg, "To: %s\r\n", to)
+	fmt.Fprintf(&msg, "Subject: %s\r\n", encSubject)
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(htmlBody)
+
+	raw := base64.URLEncoding.EncodeToString([]byte(msg.String()))
+	u := apiBase + "/messages/send"
+	return c.post(u, map[string]any{"raw": raw})
+}
+
 // EnsureLabels returns a name->id map for every name, creating any that do
 // not yet exist on the account.
 func (c *Client) EnsureLabels(names []string) (map[string]string, error) {

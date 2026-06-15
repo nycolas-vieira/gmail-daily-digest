@@ -58,11 +58,26 @@ type Organizer struct {
 	st     *report.State
 	cls    *classify.Classifier
 	dryRun bool
+	own    map[string]bool // lowercased addresses of the user's own accounts
 }
 
 // New builds an Organizer.
 func New(cfg *config.Config, bl *config.Blocklist, st *report.State, cls *classify.Classifier, dryRun bool) *Organizer {
-	return &Organizer{cfg: cfg, bl: bl, st: st, cls: cls, dryRun: dryRun}
+	own := make(map[string]bool, len(cfg.Accounts))
+	for _, a := range cfg.Accounts {
+		if e := strings.ToLower(strings.TrimSpace(a.Email)); e != "" {
+			own[e] = true
+		}
+	}
+	return &Organizer{cfg: cfg, bl: bl, st: st, cls: cls, dryRun: dryRun, own: own}
+}
+
+// isOwn reports whether addr is one of the user's own account addresses.
+// Self-sent mail (notably the organizer's own report email) must never be
+// trashed, classified, or auto-learned - a small model has been seen calling
+// the digest itself LIXO and learning the user's address into SOFT.
+func (o *Organizer) isOwn(addr string) bool {
+	return o.own[strings.ToLower(strings.TrimSpace(addr))]
 }
 
 // Run processes every configured account, accumulating into State. One
@@ -113,11 +128,19 @@ func (o *Organizer) processAccount(ctx context.Context, acct config.Account) err
 		}
 		from := strings.ToLower(m.Header("From"))
 		switch {
+		case o.isOwn(extractAddr(from)):
+			// Self-sent mail (e.g. the digest email): keep it, label PESSOAL
+			// for idempotency, never pay the model or auto-learn the address.
+			if id := labelMap[labelNames["PESSOAL"]]; id != "" {
+				o.act(client, "label:"+labelNames["PESSOAL"], m, acct, false, id)
+			}
+			log.Printf("[%s] self-mail (skip LLM) %s", acct.Name, extractAddr(from))
 		case o.bl.IsHard(from):
 			o.act(client, "trash", m, acct, true, "")
 			log.Printf("[%s] hard-trash %s", acct.Name, from)
 		case o.bl.IsSoft(from):
 			o.act(client, "revisar", m, acct, false, labelMap[RevisarLabel])
+			o.st.AddRevisarSender(extractAddr(from))
 			log.Printf("[%s] soft-review %s", acct.Name, from)
 		default:
 			toClassify = append(toClassify, m)
@@ -161,6 +184,9 @@ func (o *Organizer) applyDecision(client *gmail.Client, m *gmail.Message, acct c
 // the next email from them is reviewed, not silently trashed. In dry-run
 // it only reports what it would learn (no mutation, no file write).
 func (o *Organizer) learnSoft(acct config.Account, from string) {
+	if o.isOwn(extractAddr(from)) {
+		return // never learn the user's own address into the blocklist
+	}
 	if o.dryRun {
 		if addr := o.bl.PreviewLearnSoft(from); addr != "" {
 			o.st.AddSoftLearned(addr)
@@ -230,6 +256,19 @@ func truncate(s string, n int) string {
 		return s[:n] + "…"
 	}
 	return s
+}
+
+// extractAddr pulls the bare address out of a "Name <addr>" header (already
+// lowercased upstream), or returns the trimmed input when there is no angle
+// bracket. Mirrors config.extractAddr; kept local to avoid exporting it.
+func extractAddr(fromHeader string) string {
+	low := strings.ToLower(strings.TrimSpace(fromHeader))
+	if i := strings.IndexByte(low, '<'); i >= 0 {
+		if j := strings.IndexByte(low[i:], '>'); j > 0 {
+			return strings.TrimSpace(low[i+1 : i+j])
+		}
+	}
+	return low
 }
 
 func quoteLabel(name string) string {

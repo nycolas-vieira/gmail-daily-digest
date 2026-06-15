@@ -35,15 +35,23 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     environment:
       HOME: /data
-      OLLAMA_ENDPOINT: http://ollama:11434
+      # Interpolated so a host export (the launchd wrapper points the container
+      # at the HOST Ollama via host.docker.internal to reuse already-pulled
+      # models) wins. Falls back to the compose ollama service for the fully
+      # self-contained path (docker compose up -d ollama).
+      OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT:-http://ollama:11434}
     volumes:
       # config.json (secrets) - read-only, never copied into the image.
       - ./config.json:/app/config.json:ro
       # Only the blocklist file is shared from gmail-cli (auto-learn writes it),
       # so credentials.json / pickles / gemini-key are NOT exposed to the container.
       - ${GMAIL_CLI_DIR:-${HOME}/.config/gmail-cli}/organizer-blocklist.json:/data/.config/gmail-cli/organizer-blocklist.json
-      # state.json + rendered reports land here on the host.
+      # state.json lands here on the host.
       - ${DIGEST_DATA_DIR:-${HOME}/.config/gmail-daily-digest}:/data/.config/gmail-daily-digest
+      # report_dir from config.json ("~/repos/memories/inbox/gmail-organizer")
+      # expands against the container HOME (/data), so mount the host vault
+      # inbox there or the rendered markdown would be lost with the container.
+      - ${DIGEST_REPORT_DIR:-${HOME}/repos/memories/inbox/gmail-organizer}:/data/repos/memories/inbox/gmail-organizer
     command: ["-config", "/app/config.json"]
 
 volumes:

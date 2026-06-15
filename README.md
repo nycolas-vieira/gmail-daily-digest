@@ -104,12 +104,35 @@ and persists nothing (no state, no blocklist writes).
 ### 3. Run for real
 
 ```bash
-go run .            # organize all accounts, accumulate state
-go run . -report    # render the period digest to report_dir, then reset
-go run . -reset     # clear counters, start a fresh period
+go run .                       # organize all accounts, accumulate state
+go run . -report               # render + deliver the period digest, then reset
+go run . -reset                # clear counters, start a fresh period
+go run . -promote spam@x.com   # move a sender from SOFT to HARD (auto-trash)
 ```
 
 Build a binary if you prefer: `go build -o gmail-daily-digest .`
+
+### Report delivery
+
+`-report` always writes the Markdown digest to `report_dir`. It can also push
+it on two optional channels, configured under `report` in `config.json` (all
+fields optional - an empty channel is skipped, the Markdown file is always
+written):
+
+```json
+"report": {
+  "email": "you@gmail.com",              // mail the digest to yourself (skip if empty)
+  "from_account": "personal",            // which configured account sends it (needs gmail.send scope)
+  "argus_webhook_url": "https://.../gmail-organizer",  // push to Argus/Echo (Telegram)
+  "argus_webhook_secret": "..."          // URL-safe path secret for that endpoint
+}
+```
+
+The email and webhook secret can also be injected via the `REPORT_EMAIL`,
+`ARGUS_WEBHOOK_URL` and `ARGUS_WEBHOOK_SECRET` env vars (preferred inside
+Docker). Both channels are best-effort: a delivery failure is logged and never
+blocks the period reset. The digest lists the SOFT senders seen this period as
+promotion candidates so you can `-promote` the confirmed junk to HARD.
 
 ## Docker
 
@@ -143,15 +166,22 @@ env vars if your config uses non-default paths.
 
 The binary is stateless between runs (state lives in `state.json`), so schedule
 it however you like - e.g. a `cron` entry running the organizer hourly and the
-report once a day:
+report twice a day:
 
 ```cron
 0 * * * *  cd ~/repos/gmail-daily-digest && /usr/local/bin/ollama serve >/dev/null 2>&1; ./gmail-daily-digest
-0 20 * * * cd ~/repos/gmail-daily-digest && ./gmail-daily-digest -report
+40 7,19 * * * cd ~/repos/gmail-daily-digest && ./gmail-daily-digest -report
 ```
 
 (Ensure `ollama serve` is running; the organizer fails fast with a clear
 message if Ollama or the model is unreachable.)
+
+**On macOS, prefer `launchd` over `cron`.** macOS `cron` does not fire while
+the machine is asleep and never replays a missed slot, so a laptop that sleeps
+through 07:40 silently loses that report. `launchd` with `StartCalendarInterval`
+runs a missed calendar job once on wake. Ready-to-install plists (organize
+hourly + report at 07:40/19:40, run through Docker) and the install steps live
+in `scripts/launchd/` - see `scripts/launchd/README.md`.
 
 ## The sender blocklist
 
@@ -165,9 +195,15 @@ gmail-cli seed):
 - **SOFT** - get the `Revisar` label for manual triage instead of the trash.
   The organizer **auto-learns** any LLM-decided `LIXO` sender into SOFT (not
   HARD), so the next email from them is reviewed rather than silently dropped.
-  Promote a sender to HARD yourself once you trust it as pure junk.
+  Promote a sender to HARD with `gmail-daily-digest -promote <addr>` once you
+  trust it as pure junk (the period report suggests candidates).
 
 Matching is a case-insensitive substring test against the `From` header.
+
+> The report's "HARD: N" count includes the 2 built-in senders
+> (`aliexpress`, `github.com`) merged in from source, so it reads 2 higher than
+> the user entries in the blocklist file. That is expected, not data loss - the
+> file only stores your own entries (built-ins are re-merged on load).
 
 ## Customization
 
