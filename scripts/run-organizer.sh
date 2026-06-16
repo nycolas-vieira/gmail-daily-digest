@@ -59,14 +59,26 @@ log() {
 
 log "=== invoked: args=[$*] ==="
 
-# --- 1. Docker must be running -----------------------------------------------
+# --- 1. Docker must be running (self-heal Colima) ----------------------------
+# The container runtime here is Colima, not Docker Desktop. Colima does not
+# reliably auto-start on boot (its brew-services agent has been seen in an
+# error state), so a stopped Colima would silently kill every scheduled run.
+# Rather than just abort, try to start it ourselves so each run guarantees its
+# own runtime, independent of any login-item/brew-services health.
 if ! command -v docker >/dev/null 2>&1; then
   log "ERROR: docker CLI not found on PATH. Aborting."
   exit 1
 fi
 if ! docker info >/dev/null 2>&1; then
-  log "ERROR: Docker daemon is not running (docker info failed). Aborting."
-  exit 1
+  if command -v colima >/dev/null 2>&1; then
+    log "Docker daemon down - starting Colima..."
+    colima start >>"$LOG_FILE" 2>&1 || true
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    log "ERROR: Docker daemon is not running and could not be started. Aborting."
+    exit 1
+  fi
+  log "Colima is up."
 fi
 
 # --- 2. wait for network/DNS to be ready -------------------------------------

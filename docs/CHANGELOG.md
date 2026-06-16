@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.1.2] - 2026-06-16 - wrapper auto-curativo (start Colima se Docker down)
+
+### Fixed
+- `scripts/run-organizer.sh`: o runtime é Colima (não Docker Desktop) e seu
+  autostart via brew-services tem sido visto em estado `error`; um Colima parado
+  mataria todo run agendado em silêncio. O wrapper agora, se `docker info`
+  falhar, tenta `colima start` e re-checa antes de abortar - cada run (4x/dia)
+  garante o próprio runtime. (S-20260616-01)
+
 ## [3.1.1] - 2026-06-15 - prompt do 4b, schedule 4x/dia, escrita atômica, limpeza do SOFT
 
 Follow-up do 3.1.0 (mesmo dia). Decisão: fica no `gemma3:4b`, melhora-se o
