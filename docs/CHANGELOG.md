@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [2026-06-19] - decisão: autostart do Colima fica won't-fix (self-heal cobre)
+
+### Decision
+- `S-20260616-02` (consertar o autostart do Colima no brew-services, visto em
+  estado `error`) fechada como **won't fix**. O self-heal do wrapper
+  `scripts/run-organizer.sh` (v3.1.2, S-20260616-01) já garante o runtime a cada
+  run (4x/dia): se `docker info` falha, tenta `colima start` antes de abortar.
+  Deixar o brew-service em `started` não agrega valor prático - o único risco
+  (run agendado morto em silêncio por Colima parado) já está coberto pelo
+  wrapper. Religar o plist do brew foi avaliado e dispensado.
+
 ## [3.1.2] - 2026-06-16 - wrapper auto-curativo (start Colima se Docker down)
 
 ### Fixed
