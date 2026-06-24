@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.3.0] - 2026-06-24 - blocklist tier PRIORITY (força URGENTE)
+
+### Added
+- Tier **`priority`** na blocklist (simétrico a hard/soft): senders conhecidos
+  como importantes pulam o LLM e são forçados a **URGENTE** (ficam no inbox,
+  levantam alerta). Precedência máxima - um sender priority **nunca** é
+  trashado, mesmo que também casasse com `hard`. Caso de uso: pessoas-chave
+  (ex: founder/CEO) cujo email não pode depender do modelo acertar.
+- `Blocklist.IsPriority`; `Save` passa a persistir o tier priority.
+
 ## [3.2.0] - 2026-06-24 - multi-provider: Outlook/Microsoft Graph (S-20260619-01)
 
 ### Added

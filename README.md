@@ -25,9 +25,11 @@ For each configured account, on every run:
 1. Exchange the stored **refresh token** for a fresh access token (Google OAuth).
 2. List **fresh inbox mail** the organizer has not touched (every label it
    manages is excluded, so re-runs are idempotent).
-3. Apply the two-tier **sender blocklist** before paying for any inference:
-   - **HARD** -> straight to Trash, no LLM call (e.g. `aliexpress`, `github.com`).
-   - **SOFT** -> skip the LLM, apply the `Revisar` label for manual triage.
+3. Apply the **sender list** before paying for any inference (all skip the LLM):
+   - **PRIORITY** -> force `URGENTE` (kept in inbox, raises an alert). Highest
+     precedence; a priority sender is never trashed. For known-important people.
+   - **HARD** -> straight to Trash (e.g. `aliexpress`, `github.com`).
+   - **SOFT** -> apply the `Revisar` label for manual triage.
 4. Classify the remainder **one email at a time** with the local Ollama model
    into one category, using Ollama structured outputs to pin the JSON shape:
    - `LIXO` -> trashed (and the sender is auto-learned into SOFT for next time)

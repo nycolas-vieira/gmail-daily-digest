@@ -149,6 +149,12 @@ func (o *Organizer) processAccount(ctx context.Context, acct config.Account) err
 				o.act(client, "label:"+labelNames["PESSOAL"], m, acct, false, id)
 			}
 			log.Printf("[%s] self-mail (skip LLM) %s", acct.Name, extractAddr(from))
+		case o.bl.IsPriority(from):
+			// Known-important sender: force URGENTE (stays in inbox), raise an
+			// alert, skip the model. Wins over Hard so it is never trashed.
+			o.act(client, "label:"+labelNames["URGENTE"], m, acct, false, labelMap[labelNames["URGENTE"]])
+			o.st.AddAlert(fmt.Sprintf("%s: email de %s", acct.Name, extractAddr(from)))
+			log.Printf("[%s] priority->URGENTE %s", acct.Name, from)
 		case o.bl.IsHard(from):
 			o.act(client, "trash", m, acct, true, "")
 			log.Printf("[%s] hard-trash %s", acct.Name, from)

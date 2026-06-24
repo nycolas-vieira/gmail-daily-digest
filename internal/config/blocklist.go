@@ -26,8 +26,12 @@ var builtinHard = []string{"aliexpress", "github.com"}
 // outside the repo (git-ignored path) because it holds personal sender
 // addresses.
 type Blocklist struct {
-	Hard []string `json:"hard"`
-	Soft []string `json:"soft"`
+	// Priority senders skip the LLM and are forced to URGENTE (kept in inbox,
+	// raises an alert). Highest precedence - a priority sender is never trashed
+	// even if it also matches Hard. For known-important people (e.g. a founder).
+	Priority []string `json:"priority"`
+	Hard     []string `json:"hard"`
+	Soft     []string `json:"soft"`
 
 	path string
 }
@@ -67,8 +71,14 @@ func (b *Blocklist) mergeBuiltins() {
 }
 
 func (b *Blocklist) normalize() {
+	b.Priority = cleanList(b.Priority)
 	b.Hard = cleanList(b.Hard)
 	b.Soft = cleanList(b.Soft)
+}
+
+// IsPriority reports whether fromLower matches any priority sender substring.
+func (b *Blocklist) IsPriority(fromLower string) bool {
+	return matchAny(fromLower, b.Priority)
 }
 
 func cleanList(in []string) []string {
@@ -151,7 +161,7 @@ func (b *Blocklist) Save() error {
 	if b.path == "" {
 		return fmt.Errorf("blocklist path empty, cannot save")
 	}
-	out := Blocklist{Hard: subtractBuiltins(b.Hard), Soft: b.Soft}
+	out := Blocklist{Priority: b.Priority, Hard: subtractBuiltins(b.Hard), Soft: b.Soft}
 	raw, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err
