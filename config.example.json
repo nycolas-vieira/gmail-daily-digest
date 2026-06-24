@@ -7,7 +7,13 @@
     {
       "name": "personal",
       "email": "you@gmail.com",
+      "provider": "gmail",
       "refresh_token": "FILL_PER_ACCOUNT"
+    },
+    {
+      "name": "hotmail",
+      "email": "you@hotmail.com",
+      "provider": "outlook"
     }
   ],
   "ollama": {
@@ -20,6 +26,8 @@
     "argus_webhook_url": "",
     "argus_webhook_secret": ""
   },
+  "outlook_client_id": "FILL_FROM_AZURE_APP_REGISTRATION",
+  "outlook_token_dir": "~/.config/gmail-daily-digest",
   "blocklist_path": "~/.config/gmail-cli/organizer-blocklist.json",
   "state_path": "~/.config/gmail-daily-digest/state.json",
   "report_dir": "~/.config/gmail-daily-digest/reports",

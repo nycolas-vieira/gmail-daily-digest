@@ -23,6 +23,10 @@ type Account struct {
 	Name         string `json:"name"`
 	Email        string `json:"email"`
 	RefreshToken string `json:"refresh_token"`
+	// Provider is "gmail" (default) or "outlook". Outlook accounts hold no
+	// refresh_token here - their rotating MSA token lives in a separate token
+	// store (see OutlookTokenDir), seeded by `-outlook-auth`.
+	Provider string `json:"provider"`
 }
 
 type Ollama struct {
@@ -51,15 +55,21 @@ type Report struct {
 }
 
 type Config struct {
-	OAuth           OAuth     `json:"oauth"`
-	Accounts        []Account `json:"accounts"`
-	Ollama          Ollama    `json:"ollama"`
-	Report          Report    `json:"report"`
-	BlocklistPath   string    `json:"blocklist_path"`
-	StatePath       string    `json:"state_path"`
-	ReportDir       string    `json:"report_dir"`
-	MaxEmailsPerRun int       `json:"max_emails_per_run"`
-	MaxBodyChars    int       `json:"max_body_chars"`
+	OAuth    OAuth     `json:"oauth"`
+	Accounts []Account `json:"accounts"`
+	Ollama   Ollama    `json:"ollama"`
+	Report   Report    `json:"report"`
+	// OutlookClientID is the Azure app (public client) id shared by every
+	// outlook account. Required only when at least one account is outlook.
+	OutlookClientID string `json:"outlook_client_id"`
+	// OutlookTokenDir holds the per-account rotating refresh-token files
+	// (`outlook-token-<name>.json`). Defaults to the config.json directory.
+	OutlookTokenDir string `json:"outlook_token_dir"`
+	BlocklistPath   string `json:"blocklist_path"`
+	StatePath       string `json:"state_path"`
+	ReportDir       string `json:"report_dir"`
+	MaxEmailsPerRun int    `json:"max_emails_per_run"`
+	MaxBodyChars    int    `json:"max_body_chars"`
 }
 
 // AccountByName returns the configured account with the given name, or nil.
@@ -98,6 +108,16 @@ func Load(path string) (*Config, error) {
 	if c.Ollama.Endpoint == "" {
 		c.Ollama.Endpoint = "http://localhost:11434"
 	}
+	if c.OutlookTokenDir == "" {
+		c.OutlookTokenDir = filepath.Dir(path)
+	} else {
+		c.OutlookTokenDir = expandHome(c.OutlookTokenDir)
+	}
+	for i := range c.Accounts {
+		if c.Accounts[i].Provider == "" {
+			c.Accounts[i].Provider = "gmail"
+		}
+	}
 
 	// Env overrides let the SAME config.json run unchanged inside Docker,
 	// where Ollama lives at a different host (e.g. http://ollama:11434).
@@ -130,12 +150,6 @@ func Load(path string) (*Config, error) {
 
 func (c *Config) validate() error {
 	var missing []string
-	if c.OAuth.ClientID == "" {
-		missing = append(missing, "oauth.client_id")
-	}
-	if c.OAuth.ClientSecret == "" {
-		missing = append(missing, "oauth.client_secret")
-	}
 	if c.Ollama.Model == "" {
 		missing = append(missing, "ollama.model")
 	}
@@ -148,11 +162,36 @@ func (c *Config) validate() error {
 	if len(c.Accounts) == 0 {
 		missing = append(missing, "accounts (none configured)")
 	}
+
+	var hasGmail, hasOutlook bool
 	for i, a := range c.Accounts {
-		if a.Name == "" || a.RefreshToken == "" {
-			missing = append(missing, fmt.Sprintf("accounts[%d] (name+refresh_token required)", i))
+		switch a.Provider {
+		case "outlook":
+			hasOutlook = true
+			if a.Name == "" {
+				missing = append(missing, fmt.Sprintf("accounts[%d] (name required)", i))
+			}
+		default: // gmail
+			hasGmail = true
+			if a.Name == "" || a.RefreshToken == "" {
+				missing = append(missing, fmt.Sprintf("accounts[%d] (name+refresh_token required)", i))
+			}
 		}
 	}
+	// OAuth (Google) is only needed for gmail accounts; outlook uses its own
+	// Azure app + token store. Require each per provider actually in use.
+	if hasGmail {
+		if c.OAuth.ClientID == "" {
+			missing = append(missing, "oauth.client_id")
+		}
+		if c.OAuth.ClientSecret == "" {
+			missing = append(missing, "oauth.client_secret")
+		}
+	}
+	if hasOutlook && c.OutlookClientID == "" {
+		missing = append(missing, "outlook_client_id (an outlook account is configured)")
+	}
+
 	if len(missing) > 0 {
 		return fmt.Errorf("config invalid, missing: %s", strings.Join(missing, ", "))
 	}

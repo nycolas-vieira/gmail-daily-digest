@@ -13,6 +13,8 @@ import (
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/classify"
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/config"
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/gmail"
+	"github.com/nycolas-vieira/gmail-daily-digest/internal/mailbox"
+	"github.com/nycolas-vieira/gmail-daily-digest/internal/outlook"
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/report"
 )
 
@@ -91,8 +93,20 @@ func (o *Organizer) Run(ctx context.Context) {
 	}
 }
 
+// newClient builds the right mailbox client for an account's provider.
+func (o *Organizer) newClient(acct config.Account) (mailbox.Client, error) {
+	switch acct.Provider {
+	case "outlook":
+		return outlook.NewClient(o.cfg.OutlookClientID, outlook.TokenPath(o.cfg.OutlookTokenDir, acct.Name))
+	case "", "gmail":
+		return gmail.NewClient(o.cfg.OAuth.ClientID, o.cfg.OAuth.ClientSecret, acct.RefreshToken)
+	default:
+		return nil, fmt.Errorf("unknown provider %q for account %s", acct.Provider, acct.Name)
+	}
+}
+
 func (o *Organizer) processAccount(ctx context.Context, acct config.Account) error {
-	client, err := gmail.NewClient(o.cfg.OAuth.ClientID, o.cfg.OAuth.ClientSecret, acct.RefreshToken)
+	client, err := o.newClient(acct)
 	if err != nil {
 		return err
 	}
@@ -120,7 +134,7 @@ func (o *Organizer) processAccount(ctx context.Context, acct config.Account) err
 	}
 
 	// Hydrate + apply sender shortcuts before paying the model.
-	var toClassify []*gmail.Message
+	var toClassify []mailbox.Message
 	for _, id := range ids {
 		m := client.GetMessage(id)
 		if m == nil {
@@ -151,7 +165,7 @@ func (o *Organizer) processAccount(ctx context.Context, acct config.Account) err
 	for _, m := range toClassify {
 		d, err := o.cls.Classify(ctx, acct.Name, acct.Email, m)
 		if err != nil {
-			log.Printf("[%s] classify %s failed: %v", acct.Name, m.ID, err)
+			log.Printf("[%s] classify %s failed: %v", acct.Name, m.ID(), err)
 			o.st.AddError(acct.Name)
 			continue
 		}
@@ -162,8 +176,8 @@ func (o *Organizer) processAccount(ctx context.Context, acct config.Account) err
 	return nil
 }
 
-func (o *Organizer) applyDecision(client *gmail.Client, m *gmail.Message, acct config.Account, d classify.Decision, labelMap map[string]string) {
-	log.Printf("[%s] %-10s %s | %s", acct.Name, d.Category, truncate(d.Reason, 70), truncate(m.Header("Subject"), 60))
+func (o *Organizer) applyDecision(client mailbox.Client, m mailbox.Message, acct config.Account, d classify.Decision, labelMap map[string]string) {
+	log.Printf("[%s] %-10s %-45s | %s | %s", acct.Name, d.Category, truncate(extractAddr(m.Header("From")), 45), truncate(d.Reason, 60), truncate(m.Header("Subject"), 50))
 	if d.Category == "LIXO" {
 		o.act(client, "trash", m, acct, false, "")
 		o.learnSoft(acct, m.Header("From"))
@@ -207,12 +221,12 @@ func (o *Organizer) learnSoft(acct config.Account, from string) {
 
 // act performs (or, in dry-run, simulates) one action and records stats.
 // kind is "trash", "revisar", or "label:<Name>".
-func (o *Organizer) act(client *gmail.Client, kind string, m *gmail.Message, acct config.Account, hard bool, labelID string) {
+func (o *Organizer) act(client mailbox.Client, kind string, m mailbox.Message, acct config.Account, hard bool, labelID string) {
 	switch {
 	case kind == "trash":
 		if !o.dryRun {
-			if err := client.Trash(m.ID); err != nil {
-				log.Printf("[%s] trash %s: %v", acct.Name, m.ID, err)
+			if err := client.Trash(m.ID()); err != nil {
+				log.Printf("[%s] trash %s: %v", acct.Name, m.ID(), err)
 				return
 			}
 		}
@@ -222,8 +236,8 @@ func (o *Organizer) act(client *gmail.Client, kind string, m *gmail.Message, acc
 			return
 		}
 		if !o.dryRun {
-			if err := client.ApplyLabel(m.ID, labelID, false); err != nil {
-				log.Printf("[%s] revisar %s: %v", acct.Name, m.ID, err)
+			if err := client.ApplyLabel(m.ID(), labelID, false); err != nil {
+				log.Printf("[%s] revisar %s: %v", acct.Name, m.ID(), err)
 				return
 			}
 		}
@@ -241,8 +255,8 @@ func (o *Organizer) act(client *gmail.Client, kind string, m *gmail.Message, acc
 			}
 		}
 		if !o.dryRun {
-			if err := client.ApplyLabel(m.ID, labelID, archive); err != nil {
-				log.Printf("[%s] label %s: %v", acct.Name, m.ID, err)
+			if err := client.ApplyLabel(m.ID(), labelID, archive); err != nil {
+				log.Printf("[%s] label %s: %v", acct.Name, m.ID(), err)
 				return
 			}
 		}

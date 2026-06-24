@@ -27,27 +27,29 @@ import (
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/deliver"
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/gmail"
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/organizer"
+	"github.com/nycolas-vieira/gmail-daily-digest/internal/outlook"
 	"github.com/nycolas-vieira/gmail-daily-digest/internal/report"
 )
 
 func main() {
 	var (
-		configPath = flag.String("config", "config.json", "path to config.json")
-		dryRun     = flag.Bool("dry-run", false, "classify and log actions but change nothing and persist nothing")
-		doReport   = flag.Bool("report", false, "render the period digest to report_dir, deliver it, and reset counters")
-		doReset    = flag.Bool("reset", false, "clear counters and start a fresh period")
-		promote    = flag.String("promote", "", "move a sender from the SOFT tier to HARD (auto-trash) and exit")
+		configPath  = flag.String("config", "config.json", "path to config.json")
+		dryRun      = flag.Bool("dry-run", false, "classify and log actions but change nothing and persist nothing")
+		doReport    = flag.Bool("report", false, "render the period digest to report_dir, deliver it, and reset counters")
+		doReset     = flag.Bool("reset", false, "clear counters and start a fresh period")
+		promote     = flag.String("promote", "", "move a sender from the SOFT tier to HARD (auto-trash) and exit")
+		outlookAuth = flag.String("outlook-auth", "", "device-code authenticate an outlook account (by config name) and exit")
 	)
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)
 
-	if err := run(*configPath, *dryRun, *doReport, *doReset, *promote); err != nil {
+	if err := run(*configPath, *dryRun, *doReport, *doReset, *promote, *outlookAuth); err != nil {
 		log.Fatalf("FATAL: %v", err)
 	}
 }
 
-func run(configPath string, dryRun, doReport, doReset bool, promote string) error {
+func run(configPath string, dryRun, doReport, doReset bool, promote, outlookAuth string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -60,6 +62,9 @@ func run(configPath string, dryRun, doReport, doReset bool, promote string) erro
 	}
 
 	switch {
+	case outlookAuth != "":
+		return authOutlook(cfg, outlookAuth)
+
 	case promote != "":
 		return promoteSender(cfg, promote)
 
@@ -76,6 +81,22 @@ func run(configPath string, dryRun, doReport, doReset bool, promote string) erro
 	default:
 		return organize(cfg, st, dryRun)
 	}
+}
+
+// authOutlook runs the device-code flow for one outlook account and seeds its
+// token store. One-time (the refresh token then auto-rotates per run).
+func authOutlook(cfg *config.Config, name string) error {
+	acct := cfg.AccountByName(name)
+	if acct == nil {
+		return fmt.Errorf("account %q not found in config", name)
+	}
+	if acct.Provider != "outlook" {
+		return fmt.Errorf("account %q is provider %q, not outlook", name, acct.Provider)
+	}
+	if cfg.OutlookClientID == "" {
+		return fmt.Errorf("outlook_client_id not set in config")
+	}
+	return outlook.DeviceCode(cfg.OutlookClientID, outlook.TokenPath(cfg.OutlookTokenDir, name))
 }
 
 // promoteSender moves one sender from SOFT to HARD, the manual decision the

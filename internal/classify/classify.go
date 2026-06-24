@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nycolas-vieira/gmail-daily-digest/internal/gmail"
+	"github.com/nycolas-vieira/gmail-daily-digest/internal/mailbox"
 )
 
 // Categories are the only labels the model may emit. They double as Gmail
@@ -75,7 +75,11 @@ PROCEDIMENTO (siga NESTA ordem, pare na primeira que casar - evita inconsistênc
 
 REGRAS QUE O MODELO COSTUMA ERRAR (preste atenção):
 - CONTAS é SÓ dinheiro concreto do usuário. "Novidades do produto", "conheça o recurso X", aviso de mudança de termos, comentário de PR, alerta do Google, convite de evento NÃO são CONTAS - geralmente são LIXO ou NEWSLETTER. Sem valor monetário concreto OU vencimento real, não é CONTAS.
-- "Promoção/oferta/cupom/desconto/% OFF/imperdível/novidades/confira" = LIXO, mesmo vindo de banco, fintech ou loja.
+- CONTAS é uma dívida/pagamento que JÁ existe na vida do usuário (a fatura, o boleto, a cobrança ou o comprovante que é dele e tem valor e vencimento reais). OFERTA ou PROPOSTA de produto financeiro NÃO é CONTAS, é LIXO, mesmo citando valores: pré-aprovação de cartão/crédito, proposta de empréstimo, proposta/cotação de plano de saúde ou seguro ("Proposta para você", "liberamos condições especiais", "até X% de economia"), "renegocie/organize suas contas/dívidas", "você já tem R$ X pra usar", programa de milhas/pontos, "condições de lançamento". Proposta comercial e cotação nunca são CONTAS, ainda que pareçam fatura. Mencionar dinheiro de forma abstrata ou hipotética NÃO faz um email ser CONTAS.
+- Código de uso único / OTP / código de verificação / código de acesso = sempre URGENTE, nunca CONTAS.
+- Aviso operacional sem valor (mudança de limite, novo recurso, manutenção, "novidade na forma de X") NÃO é CONTAS.
+- "Promoção/oferta/cupom/desconto/% OFF/imperdível/novidades/confira" = LIXO, mesmo vindo de banco, fintech, corretora ou loja.
+- NUNCA invente valor, data de vencimento ou dado que não está LITERALMENTE no email. O reason deve descrever o conteúdo REAL do email recebido - se não há valor/vencimento no texto, não é CONTAS e o reason não pode citar valor.
 - Sugestão de amizade, "fulano comentou", digest de rede social, "veja o que você perdeu" = LIXO.
 - Pesquisa de satisfação / "avalie seu atendimento" = LIXO.
 - NUNCA mande pro LIXO: email de segurança, fatura/cobrança real, documento fiscal, ou mensagem de pessoa. Na dúvida entre LIXO e algo transacional, NÃO use LIXO.
@@ -87,6 +91,10 @@ EXEMPLOS:
 - "Sua fatura do cartão fechou: R$ 1.240,00, vence 20/06" -> CONTAS (alert: vence em 72h)
 - "Seu código de verificação é 884213" -> URGENTE
 - "Novidades do Figma: conheça o novo modo dev" -> LIXO (NÃO CONTAS)
+- "BRADESCO AMEX: Comunicado de Pré-Aprovação de cartão" -> LIXO (oferta de produto, NÃO CONTAS)
+- "Você já tem o valor pra organizar suas contas" / "Renegocie sua dívida" -> LIXO (oferta de empréstimo, NÃO CONTAS)
+- "Novidade na forma de juntar milhas e resgatá-las" -> LIXO (programa de pontos, NÃO CONTAS)
+- "Mudança nos limites de transações no fim de semana" -> LIXO (aviso operacional sem valor)
 - "The Batch: as novidades de IA da semana" (Substack) -> NEWSLETTER
 - "Seu pedido do iFood saiu para entrega" -> PESSOAL
 - "Nota Fiscal Eletrônica - NFe 12345 (PDF)" -> DOCUMENTO
@@ -95,7 +103,7 @@ EXEMPLOS:
 reason: no máximo uma frase curta. alert: só quando URGENTE ou vencimento nas próximas 72h, senão deixe vazio.`
 
 // Classify returns the Decision for a single message.
-func (c *Classifier) Classify(ctx context.Context, accountName, accountEmail string, m *gmail.Message) (Decision, error) {
+func (c *Classifier) Classify(ctx context.Context, accountName, accountEmail string, m mailbox.Message) (Decision, error) {
 	user := c.renderEmail(accountName, accountEmail, m)
 
 	reqBody := map[string]any{
@@ -141,12 +149,12 @@ func (c *Classifier) Classify(ctx context.Context, accountName, accountEmail str
 	if err := json.Unmarshal([]byte(out.Message.Content), &d); err != nil {
 		return Decision{}, fmt.Errorf("parse model output %q: %w", truncate(out.Message.Content, 200), err)
 	}
-	d.MessageID = m.ID
+	d.MessageID = m.ID()
 	d.Category = normalizeCategory(d.Category)
 	return d, nil
 }
 
-func (c *Classifier) renderEmail(accountName, accountEmail string, m *gmail.Message) string {
+func (c *Classifier) renderEmail(accountName, accountEmail string, m mailbox.Message) string {
 	from := m.Header("From")
 	subj := m.Header("Subject")
 	if subj == "" {

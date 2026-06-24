@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.2.0] - 2026-06-24 - multi-provider: Outlook/Microsoft Graph (S-20260619-01)
+
+### Added
+- **Provider abstraction** (`internal/mailbox`): interfaces `Client`/`Message`
+  que o organizer, o classifier e o report passam a consumir. `internal/gmail`
+  deixa de ser concreto no pipeline - agora é uma implementação da interface,
+  ao lado da nova `internal/outlook`.
+- **Outlook/Microsoft Graph** (`internal/outlook`): lê o **Focused inbox**,
+  classifica com o mesmo Ollama + blocklist, mapeia categoria -> **master
+  category** do Outlook, `LIXO` -> Deleted Items, arquiva os arquiváveis na
+  pasta Archive. Idempotência por categoria gerenciada já aplicada.
+- **Auth Outlook desacoplada**: app público (device-code) com refresh token
+  próprio do digest (não compartilha token com o mail-cli). Rotação MSA
+  persistida a cada run. Flag `-outlook-auth <conta>` faz o seed do token.
+  Scopes: `Mail.ReadWrite MailboxSettings.ReadWrite offline_access` (o segundo
+  é necessário pra registrar as master categories com cor).
+- **Config multi-provider**: campo `provider` por conta (`gmail` default ou
+  `outlook`), `outlook_client_id` e `outlook_token_dir`. Validação passa a
+  exigir credenciais por provider de fato em uso (OAuth Google só se houver
+  conta gmail; Azure client id só se houver outlook).
+- Log de decisão do organizer agora inclui o remetente (`From`), útil pra
+  montar o trash_list.
+
+### Changed
+- Classificação endurecida pra reduzir falso-`CONTAS`: oferta/proposta/cotação
+  financeira (pré-aprovação de cartão, empréstimo, plano de saúde, milhas) =
+  `LIXO`; OTP/código de uso único = `URGENTE`; proibido inventar valor/data
+  que não está no email. Vale pros dois providers (mesmo pipeline).
+
+### Fixed
+- `internal/outlook`: query do `ListMessageIDs` montada com `url.Values.Encode()`
+  (o espaço cru em `$orderby=receivedDateTime desc` gerava HTTP 400 HTML).
+- `internal/outlook`: filtro `Focused` movido pro client-side - o Graph rejeita
+  `$filter(inferenceClassification)` + `$orderby(receivedDateTime)` juntos
+  (`InefficientFilter`); o `$orderby` newest-first é mantido pro cap de `max`.
+- `EnsureLabels` deixa de engolir o erro do POST de master category: ignora só
+  `409` (já existe), propaga o resto (ex: `403` por scope faltando) - fail-loudly.
+
+### Security
+- Token store do Outlook fica em `~/.config/gmail-daily-digest/` (fora do repo
+  **público**) e `outlook-token-*.json` foi adicionado ao `.gitignore` como
+  cinto-e-suspensório pro caso default-dir.
+
 ## [2026-06-19] - decisão: autostart do Colima fica won't-fix (self-heal cobre)
 
 ### Decision

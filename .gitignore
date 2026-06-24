@@ -24,6 +24,11 @@ token.json
 config.json
 state.json
 
+# Outlook refresh-token stores (per-account MSA tokens). Belt-and-suspenders:
+# the real tokens live in ~/.config/gmail-daily-digest, never the repo, but
+# guard the default-token-dir case (= config.json dir) anyway.
+outlook-token-*.json
+
 # Environment variables
 .env
 

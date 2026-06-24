@@ -1,10 +1,17 @@
 # Gmail Daily Digest
 
-A local Go binary that organizes one or more Gmail inboxes: it trashes junk,
-labels and archives the rest by category, and writes a periodic Markdown
-digest. Classification runs **entirely on your machine** with a local
-[Ollama](https://ollama.com) model (`qwen2.5:7b`) - no cloud LLM, no API key,
-no per-email cost.
+A local Go binary that organizes one or more **Gmail and Outlook** inboxes: it
+trashes junk, labels/categorizes and archives the rest by category, and writes
+a periodic Markdown digest. Classification runs **entirely on your machine**
+with a local [Ollama](https://ollama.com) model (`qwen2.5:7b`) - no cloud LLM,
+no API key, no per-email cost.
+
+Both providers share one pipeline (classify + blocklist); each implements the
+`internal/mailbox` interface (`internal/gmail` over the Gmail API,
+`internal/outlook` over Microsoft Graph). Set `provider` per account in the
+config (`gmail` is the default; `outlook` maps categories to Outlook **master
+categories**, `LIXO` to Deleted Items, and archivable categories to the Archive
+folder).
 
 > **V3 (this version)** replaces the previous Google Apps Script + Gemini
 > runtime. The whole pipeline now runs locally from a single Go binary. The
@@ -52,9 +59,11 @@ gmail-daily-digest/
 ├── main.go                       # entry point + run modes
 ├── internal/
 │   ├── config/                   # config.json loader + two-tier blocklist
-│   ├── gmail/                    # thin Gmail REST client + OAuth + HTML strip
+│   ├── mailbox/                  # provider-agnostic Client/Message interfaces
+│   ├── gmail/                    # Gmail REST client (mailbox.Client) + OAuth
+│   ├── outlook/                  # Microsoft Graph client (mailbox.Client) + MSA auth
 │   ├── classify/                 # Ollama structured-output classifier + prompt
-│   ├── organizer/                # per-account pipeline (port of processAccount_)
+│   ├── organizer/                # per-account pipeline, dispatches by provider
 │   └── report/                   # period state (state.json) + Markdown digest
 ├── config.example.json           # template (the real config.json is git-ignored)
 ├── scripts/bootstrap-config.sh   # generate config.json from your gmail-cli install
@@ -111,6 +120,33 @@ go run . -promote spam@x.com   # move a sender from SOFT to HARD (auto-trash)
 ```
 
 Build a binary if you prefer: `go build -o gmail-daily-digest .`
+
+### Outlook accounts (Microsoft Graph)
+
+Outlook accounts are decoupled from gmail-cli and authenticate separately:
+
+1. Register a **public-client** app in [Microsoft Entra ID](https://entra.microsoft.com)
+   (Azure AD) for *personal Microsoft accounts*, enable the device-code /
+   public-client flow, and add the delegated scopes `Mail.ReadWrite` and
+   `MailboxSettings.ReadWrite`. Put its application (client) id in
+   `outlook_client_id`.
+2. Add the account to `accounts` with `"provider": "outlook"` (no
+   `refresh_token` here - Outlook tokens live in their own store):
+   ```json
+   { "name": "hotmail", "email": "you@hotmail.com", "provider": "outlook" }
+   ```
+3. Seed the token once via device code:
+   ```bash
+   go run . -outlook-auth hotmail
+   ```
+   It prints a URL + code; sign in and approve. The rotating refresh token is
+   saved to `outlook_token_dir/outlook-token-<name>.json` (default:
+   `~/.config/gmail-daily-digest`, **outside** the repo; `outlook-token-*.json`
+   is git-ignored). From then on it auto-rotates each run.
+
+`MailboxSettings.ReadWrite` is only used to register the category names as
+Outlook **master categories** (so they show with a color); message tagging,
+move and trash work with `Mail.ReadWrite` alone.
 
 ### Report delivery
 

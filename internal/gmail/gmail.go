@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nycolas-vieira/gmail-daily-digest/internal/mailbox"
 )
 
 const (
@@ -77,13 +79,17 @@ type Part struct {
 	Parts []Part `json:"parts"`
 }
 
-// Message is the subset of a Gmail message the organizer needs.
+// Message is the subset of a Gmail message the organizer needs. It satisfies
+// mailbox.Message.
 type Message struct {
-	ID           string   `json:"id"`
+	RawID        string   `json:"id"`
 	InternalDate string   `json:"internalDate"`
 	LabelIDs     []string `json:"labelIds"`
 	Payload      Part     `json:"payload"`
 }
+
+// ID is the stable message id (mailbox.Message).
+func (m *Message) ID() string { return m.RawID }
 
 // Header returns the named header value (case-insensitive), or "".
 func (m *Message) Header(name string) string {
@@ -176,7 +182,7 @@ func (c *Client) ListMessageIDs(query string, maxResults int) ([]string, error) 
 
 // GetMessage fetches a full message. Returns nil (no error) when the
 // message cannot be read, so a single bad id never aborts a run.
-func (c *Client) GetMessage(id string) *Message {
+func (c *Client) GetMessage(id string) mailbox.Message {
 	u := fmt.Sprintf("%s/messages/%s?format=full", apiBase, id)
 	var m Message
 	var probe struct {
