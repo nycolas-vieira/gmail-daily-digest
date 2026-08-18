@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  gmail-daily-digest V3 - report pass (launchd), 4x/day every 6h.
+  gmail-daily-digest V3 - report pass (launchd), 2x/day.
 
-  Replaces the old crontab line "40 7,19 * * * ... -report". Cadence decided
-  2026-06-15: 4 digests/day at 00:30, 06:30, 12:30, 18:30 - 30 min after each
-  organize slot (00/06/12/18) so the digest reflects that run's actions.
+  Replaces the old crontab line "40 7,19 * * * ... -report". Cadence reduced
+  2026-08-18: 2 digests/day at 07:30 and 19:30 - 30 min after each organize
+  slot (07/19) so the digest reflects that run's actions.
 
   If the Mac was asleep at the slot, launchd runs it once on wake (cron
   silently skipped it - that is the bug this migration fixes). Calls the
@@ -26,13 +26,11 @@
         <string>-report</string>
     </array>
 
-    <!-- 00:30, 06:30, 12:30, 18:30 local time (30 min after each organize). -->
+    <!-- 07:30, 19:30 local time (30 min after each organize). -->
     <key>StartCalendarInterval</key>
     <array>
-        <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>30</integer></dict>
-        <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
-        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>30</integer></dict>
-        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
     </array>
 
     <key>RunAtLoad</key>

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.3.1] - 2026-08-18 - cadência 2x/dia
+
+### Changed
+- Cadência dos launch agents cortada de 4x/dia (00/06/12/18) para **2x/dia**:
+  `organize` às 07:00 e 19:00, `report` às 07:30 e 19:30. Plists ativos em
+  `~/Library/LaunchAgents` e os fontes em `scripts/launchd/` sincronizados,
+  tabela de horários do `scripts/launchd/README.md` corrigida (estava
+  descrevendo o schedule antigo de cron, hourly + 07:40/19:40).
+
 ## [3.3.0] - 2026-06-24 - blocklist tier PRIORITY (força URGENTE)
 
 ### Added

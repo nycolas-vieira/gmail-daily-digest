@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  gmail-daily-digest V3 - organize pass (launchd), 4x/day every 6h.
+  gmail-daily-digest V3 - organize pass (launchd), 2x/day.
 
-  Replaces the old crontab line "0 * * * * ...". Cadence decided 2026-06-15:
-  since it is local/Docker/free, run at 00:00, 06:00, 12:00, 18:00 (the
-  report plist fires 30 min after each, at :30).
+  Replaces the old crontab line "0 * * * * ...". Cadence reduced 2026-08-18:
+  runs at 07:00 and 19:00 (the report plist fires 30 min after each, at :30).
 
   WHY launchd: macOS cron does NOT fire while the Mac is asleep and never
   replays a missed slot. launchd with StartCalendarInterval runs the missed
@@ -25,13 +24,11 @@
         <string>/Users/nycolasvieira/repos/gmail-daily-digest/scripts/run-organizer.sh</string>
     </array>
 
-    <!-- 00:00, 06:00, 12:00, 18:00. launchd replays a missed slot once on wake. -->
+    <!-- 07:00, 19:00. launchd replays a missed slot once on wake. -->
     <key>StartCalendarInterval</key>
     <array>
-        <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
     </array>
 
     <!-- Do not run on load/login; only on the calendar schedule. -->

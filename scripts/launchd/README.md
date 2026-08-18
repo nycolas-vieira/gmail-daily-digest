@@ -14,8 +14,8 @@ which waits for the network to come up before invoking the container.
 
 | File | Purpose | Schedule |
 |------|---------|----------|
-| `com.nyc.gmail-digest.organize.plist` | hourly organize pass | every hour at minute 0 |
-| `com.nyc.gmail-digest.report.plist` | digest + counter reset | 07:40 and 19:40 local |
+| `com.nyc.gmail-digest.organize.plist` | organize pass | 07:00 and 19:00 local |
+| `com.nyc.gmail-digest.report.plist` | digest + counter reset | 07:30 and 19:30 local |
 
 Both point at `/Users/nycolasvieira/repos/gmail-daily-digest/scripts/run-organizer.sh`
 and log to `/Users/nycolasvieira/.local/logs/gmail-daily-digest.log`.
