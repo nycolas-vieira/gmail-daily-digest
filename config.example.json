@@ -28,7 +28,7 @@
   },
   "outlook_client_id": "FILL_FROM_AZURE_APP_REGISTRATION",
   "outlook_token_dir": "~/.config/gmail-daily-digest",
-  "blocklist_path": "~/.config/gmail-cli/organizer-blocklist.json",
+  "blocklist_path": "~/.config/mail-cli/organizer-blocklist.json",
   "state_path": "~/.config/gmail-daily-digest/state.json",
   "report_dir": "~/.config/gmail-daily-digest/reports",
   "max_emails_per_run": 80,

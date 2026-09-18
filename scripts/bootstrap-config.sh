@@ -1,27 +1,10 @@
 #!/usr/bin/env bash
-#
-# bootstrap-config.sh - generate the git-ignored config.json for V3.
-#
-# This repo is PUBLIC and ships zero secrets. The runtime config (OAuth
-# client + per-account refresh tokens) is reconstructed locally from the
-# gmail-cli install you already authenticated:
-#
-#   OAuth client -> ~/.config/gmail-cli/credentials.json  (installed.*)
-#   per-account  -> ~/.config/gmail-cli/accounts/<name>/token.pickle
-#
-# It does NOT overwrite an existing config.json unless you pass --force.
-# Reading the pickles needs Python with the google-auth libs; the script
-# reuses the gmail-cli venv for that.
-#
-# Usage:
-#   scripts/bootstrap-config.sh [--force] [--model qwen2.5:7b]
-#
 set -euo pipefail
 
-GMAIL_CLI_DIR="${GMAIL_CLI_DIR:-$HOME/.config/gmail-cli}"
-CREDS="$GMAIL_CLI_DIR/credentials.json"
-ACCOUNTS_DIR="$GMAIL_CLI_DIR/accounts"
-VENV_PY="$GMAIL_CLI_DIR/venv/bin/python"
+MAIL_CLI_DIR="${MAIL_CLI_DIR:-$HOME/.config/mail-cli}"
+CREDS="$MAIL_CLI_DIR/credentials.json"
+ACCOUNTS_DIR="$MAIL_CLI_DIR/accounts"
+VENV_PY="$MAIL_CLI_DIR/venv/bin/python"
 OUT="config.json"
 MODEL="qwen2.5:7b"
 FORCE=0
@@ -34,9 +17,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -f "$CREDS" ] || { echo "ERROR: $CREDS not found (run gmail-cli auth first)" >&2; exit 1; }
+[ -f "$CREDS" ] || { echo "ERROR: $CREDS not found (run mail-cli auth first)" >&2; exit 1; }
 [ -d "$ACCOUNTS_DIR" ] || { echo "ERROR: $ACCOUNTS_DIR not found" >&2; exit 1; }
-[ -x "$VENV_PY" ] || { echo "ERROR: $VENV_PY not found (gmail-cli venv missing)" >&2; exit 1; }
+[ -x "$VENV_PY" ] || { echo "ERROR: $VENV_PY not found (mail-cli venv missing)" >&2; exit 1; }
 if [ -f "$OUT" ] && [ "$FORCE" -ne 1 ]; then
   echo "ERROR: $OUT already exists. Re-run with --force to overwrite." >&2
   exit 1
@@ -92,7 +75,7 @@ cfg = {
     "oauth": {"client_id": client_id, "client_secret": client_secret},
     "accounts": accounts,
     "ollama": {"endpoint": "http://localhost:11434", "model": model},
-    "blocklist_path": "~/.config/gmail-cli/organizer-blocklist.json",
+    "blocklist_path": "~/.config/mail-cli/organizer-blocklist.json",
     "state_path": "~/.config/gmail-daily-digest/state.json",
     "report_dir": "~/.config/gmail-daily-digest/reports",
     "max_emails_per_run": 80,

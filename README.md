@@ -68,7 +68,7 @@ gmail-daily-digest/
 │   ├── organizer/                # per-account pipeline, dispatches by provider
 │   └── report/                   # period state (state.json) + Markdown digest
 ├── config.example.json           # template (the real config.json is git-ignored)
-├── scripts/bootstrap-config.sh   # generate config.json from your gmail-cli install
+├── scripts/bootstrap-config.sh   # generate config.json from your mail-cli install
 └── docs/CHANGELOG.md
 ```
 
@@ -79,8 +79,8 @@ gmail-daily-digest/
   ```bash
   ollama pull qwen2.5:7b
   ```
-- An existing authenticated [gmail-cli](https://github.com/your-repo/gmail-cli)
-  install at `~/.config/gmail-cli` (OAuth client in `credentials.json`,
+- An existing authenticated [mail-cli](https://github.com/your-repo/mail-cli)
+  install at `~/.config/mail-cli` (OAuth client in `credentials.json`,
   per-account `token.pickle` files). This is where the bootstrap reads the
   OAuth client and refresh tokens from.
 
@@ -92,8 +92,8 @@ gmail-daily-digest/
 ./scripts/bootstrap-config.sh
 ```
 
-This reads the OAuth client from `~/.config/gmail-cli/credentials.json` and the
-per-account refresh tokens from `~/.config/gmail-cli/accounts/*/token.pickle`,
+This reads the OAuth client from `~/.config/mail-cli/credentials.json` and the
+per-account refresh tokens from `~/.config/mail-cli/accounts/*/token.pickle`,
 fetches each account's email via the Gmail profile API, and writes a
 `config.json` (chmod 600, git-ignored). Pass `--force` to overwrite an existing
 one, `--model <name>` to use a different Ollama model.
@@ -125,7 +125,7 @@ Build a binary if you prefer: `go build -o gmail-daily-digest .`
 
 ### Outlook accounts (Microsoft Graph)
 
-Outlook accounts are decoupled from gmail-cli and authenticate separately:
+Outlook accounts are decoupled from mail-cli and authenticate separately:
 
 1. Register a **public-client** app in [Microsoft Entra ID](https://entra.microsoft.com)
    (Azure AD) for *personal Microsoft accounts*, enable the device-code /
@@ -197,7 +197,7 @@ UID=$(id -u) GID=$(id -g) docker compose run --rm organizer -report    # digest 
 
 The container sets `OLLAMA_ENDPOINT=http://ollama:11434`, so the same
 `config.json` (which points Ollama at `localhost` for native runs) works
-unchanged. Override the model path with the `GMAIL_CLI_DIR` / `DIGEST_DATA_DIR`
+unchanged. Override the model path with the `MAIL_CLI_DIR` / `DIGEST_DATA_DIR`
 env vars if your config uses non-default paths.
 
 ## Scheduling
@@ -224,8 +224,8 @@ in `scripts/launchd/` - see `scripts/launchd/README.md`.
 ## The sender blocklist
 
 The two-tier blocklist lives outside the repo at
-`~/.config/gmail-cli/organizer-blocklist.json` (git-ignored, shared with the
-gmail-cli seed):
+`~/.config/mail-cli/organizer-blocklist.json` (git-ignored, shared with the
+mail-cli seed):
 
 - **HARD** - confirmed junk, auto-trashed with no LLM call. A small built-in
   baseline (`aliexpress`, `github.com`) is merged in from source; everything

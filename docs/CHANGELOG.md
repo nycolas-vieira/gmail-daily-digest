@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **:date: ORDER**: Entries are organized in **descending chronological order** (newest first).
 
+## [3.3.2] - 2026-09-18 - roda no colima, caminho mail-cli
+
+### Fixed
+
+- **Organizer não alcançava o Ollama fora do Docker Desktop**: `host.docker.internal` só existe no
+  Docker Desktop. O serviço `organizer` ganhou `extra_hosts: host.docker.internal:host-gateway`, e
+  roda igual no colima.
+
+### Changed
+
+- O blocklist sai de `~/.config/mail-cli/organizer-blocklist.json`, porque `~/.config/gmail-cli`
+  não existe mais. A variável de override passou a se chamar `MAIL_CLI_DIR`.
+- Comentários removidos do compose e do `bootstrap-config.sh`.
+
 ## [3.3.1] - 2026-08-18 - cadência 2x/dia
 
 ### Changed
