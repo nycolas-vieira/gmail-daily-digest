@@ -41,7 +41,7 @@ type Summary struct {
 }
 
 // promoteHint is the exact CLI the user runs to act on a candidate.
-const promoteHint = "gmail-daily-digest -promote <addr>"
+const promoteHint = "gmail-daily-digest -config ~/repos/gmail-daily-digest/config.json -promote <addr>"
 
 // Email renders the digest as HTML and mails it from->to via the Gmail API.
 func Email(s Sender, from, to string, sum Summary) error {
